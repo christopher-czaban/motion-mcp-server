@@ -1,0 +1,47 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dev-debug.log
+
+# Rules files
+.roo
+.windsurfrules
+.cursor
+.roomodes
+
+# Dependency directories
+node_modules/
+
+# Environment variables
+.env
+
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS specific
+.DS_Store
+
+# Taskmasters files and cofigs
+tasks.json
+tasks/
+scripts/
+.taskmasterconfig
+.taskmaster.env.example
+prd.txt
+prd_rate_limit.txt
+
+# Database files
+.data/ 
+
+# Unrelated documentation
+mcp_llms-full.txt
+motion_openapi_specification.json

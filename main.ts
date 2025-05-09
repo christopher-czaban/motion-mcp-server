@@ -13,8 +13,381 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import './database.js'; // Ensures database is initialized on startup
+import rateLimiter from './rate_limiter.js'; 
+
+// Prune old records on server startup
+try {
+  rateLimiter.pruneOldRecords(Date.now());
+  console.error('[RateLimiter] Successfully pruned old records on startup.');
+} catch (error) {
+  console.error('[RateLimiter] Error pruning old records on startup:', error);
+  // Depending on policy, might want to re-throw or handle differently
+}
+
+// Rate Limiting Constants
+const MAX_CALLS = 12;
+const TIME_WINDOW_MS = 180000; // 3 minutes in milliseconds
+const LOG_PRUNE_AFTER_MS = 600000; // 10 minutes in milliseconds
 
 let baseUrl = 'https://api.usemotion.com/v1'; // Base URL from Swagger spec or default
+
+// Helper function to retrieve a value from an object using a dot-notation path
+function getValueByPath(obj: any, path: string): { value: any; found: boolean } {
+  if (obj === null || obj === undefined || typeof obj !== 'object' || !path) {
+    return { value: undefined, found: false };
+  }
+  const parts = path.split('.');
+  let current = obj;
+  for (const part of parts) {
+    if (current === null || current === undefined || typeof current !== 'object' || !Object.prototype.hasOwnProperty.call(current, part)) {
+      return { value: undefined, found: false };
+    }
+    current = current[part];
+  }
+  return { value: current, found: true };
+}
+
+// Utility function to format a date string to YYYY-MM-DD
+// Returns original string if parsing fails or input is invalid, or null if input is null/undefined.
+function formatDateToYYYYMMDD(dateString: string | null | undefined): string | null {
+  if (dateString === null || dateString === undefined) {
+    return null;
+  }
+  try {
+    // Check if it's already in YYYY-MM-DD format to avoid re-processing
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      return dateString;
+    }
+    const date = new Date(dateString);
+    // Check if date is valid after parsing
+    if (isNaN(date.getTime())) {
+      return dateString; // Return original if invalid date string
+    }
+    return date.toISOString().split('T')[0];
+  } catch (e) {
+    // In case of any other error during parsing or processing
+    return dateString; // Return original string on error as per PRD nuance
+  }
+}
+
+// Utility function to format specific date fields within an object to YYYY-MM-DD
+// Modifies the object in place if a field is found and validly formatted, 
+// otherwise leaves it as is or as formatted by formatDateToYYYYMMDD (which can return original on error).
+function formatObjectDates(obj: any, dateFieldPaths: string[]): void {
+  if (!obj || typeof obj !== 'object' || !dateFieldPaths || dateFieldPaths.length === 0) {
+    return; // No object or no fields to process
+  }
+
+  for (const path of dateFieldPaths) {
+    let current = obj;
+    const parts = path.split('.');
+    const lastPart = parts.pop(); // Get the actual field name and remove it from parts
+
+    if (!lastPart) continue; // Should not happen with valid paths
+
+    // Navigate to the parent of the target field
+    let parent = obj;
+    for (const part of parts) {
+      if (parent && typeof parent === 'object' && Object.prototype.hasOwnProperty.call(parent, part)) {
+        parent = parent[part];
+      } else {
+        parent = null; // Path is invalid or part not found
+        break;
+      }
+    }
+
+    // If parent is valid and has the target field, format it
+    if (parent && typeof parent === 'object' && Object.prototype.hasOwnProperty.call(parent, lastPart)) {
+      const originalValue = parent[lastPart];
+      const formattedDate = formatDateToYYYYMMDD(originalValue);
+      // formatDateToYYYYMMDD returns original on error/invalid, or null if input was null.
+      // We only update if it makes sense (e.g. if formatDateToYYYYMMDD actually changed it or it was null)
+      if (formattedDate !== originalValue || originalValue === null) { 
+        parent[lastPart] = formattedDate;
+      }
+    }
+  }
+}
+
+// Helper function to process a single object based on specified fields and rules
+function _processSingleObjectInternal(
+  obj: any,
+  fieldsToSelect: string[],
+  // toolSpecificRules will be used in later subtasks
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  toolSpecificRules?: Record<string, any>,
+  isDefaultMode?: boolean // Added for Subtask 1.3
+): any {
+  if (obj === null || obj === undefined || typeof obj !== 'object') {
+    return {}; // Or null, depending on desired behavior for non-objects
+  }
+  const result: Record<string, any> = {};
+  for (const fieldPath of fieldsToSelect) {
+    let currentValue: any;
+    let isValidField: boolean = false;
+
+    // MODIFICATION FOR SUBTASK 1.2:
+    if (fieldPath.includes('.')) {
+      const { value, found } = getValueByPath(obj, fieldPath);
+      if (found) {
+        currentValue = value; // Store for further processing
+        isValidField = true;
+      } else {
+        // Optionally set to null if not found, or omit. PRD implies omitting or standard error later.
+        // For now, let's omit if not found to keep responses clean.
+        isValidField = false;
+      }
+    } else if (Object.prototype.hasOwnProperty.call(obj, fieldPath)) {
+      currentValue = obj[fieldPath]; // Store for further processing
+      isValidField = true;
+    } else {
+      isValidField = false;
+    }
+
+    if (isValidField) {
+      if (Array.isArray(currentValue)) {
+        const itemSimplificationRule = toolSpecificRules?.[fieldPath]?.defaultItemSimplification;
+        
+        // Apply itemSimplificationRule if it exists, regardless of isDefaultMode, 
+        // when the array field itself (fieldPath) is being processed.
+        // This handles cases like PRD 2.3's "simplified optional" for assignees.
+        if (typeof itemSimplificationRule === 'function') {
+          try {
+            result[fieldPath] = currentValue.map(itemSimplificationRule);
+          } catch (e) {
+            console.error(`Error applying itemSimplificationRule for field '${fieldPath}':`, e);
+            result[fieldPath] = currentValue; // Fallback to full array on rule error
+          }
+        } else {
+          // No specific simplification rule for this array field (or it was handled by fields like array[].property).
+          // If !isDefaultMode, PRD 1.3.3 (return full array) applies unless a rule handled it.
+          // If isDefaultMode and no rule, also return full array (e.g. array of primitives).
+          result[fieldPath] = currentValue; 
+        }
+      } else if (typeof currentValue === 'object' && currentValue !== null && !isDefaultMode) {
+        // Optional Mode for an object field, check for container simplification (PRD 1.3.1)
+        const containerRule = toolSpecificRules?.[fieldPath]?.optionalContainerSimplification;
+        if (typeof containerRule === 'function') {
+          try {
+            const simplifiedObject = containerRule(currentValue);
+            Object.assign(result, simplifiedObject); // Merge properties from rule output
+          } catch (e) {
+            console.error(`Error applying optionalContainerSimplification for field '${fieldPath}':`, e);
+            // If rule fails, the original object might still be added if fieldPath was directly requested
+            // and no other rule applies. This part handles the rule itself failing.
+            // If fieldPath was a direct request (e.g. fields:["manager"]) and rule fails,
+            // it will fall through to the general 'else' block below if not already handled.
+            // To ensure it doesn't get added again by the generic logic if the rule was the SOLE source for these fields:
+            // We can check if result[fieldPath] was already set OR if the rule was supposed to be the exclusive handler for this fieldPath.
+            // For now, the Object.assign is simply skipped. If the fieldPath itself was requested, it might be added by the generic handler later.
+            // This behavior might need refinement based on how strictly PRD 1.3.1 should be interpreted on rule failure.
+          }
+        } else {
+          // Optional mode, object, but no specific container simplification rule.
+          result[fieldPath] = currentValue;
+        }
+      } else {
+        // Primitive value, or an object in default mode (no special container simplification for objects in default mode by default)
+        result[fieldPath] = currentValue;
+      }
+    }
+  }
+  // Apply post-processing rules after all fields are initially populated
+  for (const fieldKey in result) {
+    if (Object.prototype.hasOwnProperty.call(result, fieldKey)) {
+      const postProcessRule = toolSpecificRules?.[fieldKey]?.postProcessField;
+      if (typeof postProcessRule === 'function') {
+        try {
+          result[fieldKey] = postProcessRule(result[fieldKey]);
+        } catch (e) {
+          console.error(`Error applying postProcessField for field '${fieldKey}':`, e);
+          // On error, leave the original selected value in place
+        }
+      }
+    }
+  }
+  return result;
+}
+
+// Main utility function to select and transform fields from data
+function selectFieldsFromData(
+  data: any,
+  requestedFields?: string[],
+  toolDefaultFields?: string[],
+  toolSpecificRules?: Record<string, any>
+): any {
+  const effectiveFields = (requestedFields && requestedFields.length > 0) 
+    ? requestedFields 
+    : (toolDefaultFields && toolDefaultFields.length > 0 ? toolDefaultFields : []);
+  
+  const isDefaultMode = !(requestedFields && requestedFields.length > 0);
+
+  if (effectiveFields.length === 0 || data === null || data === undefined) {
+    return Array.isArray(data) ? [] : {};
+  }
+
+  if (Array.isArray(data)) {
+    return data.map(item => _processSingleObjectInternal(item, effectiveFields, toolSpecificRules, isDefaultMode));
+  } else {
+    return _processSingleObjectInternal(data, effectiveFields, toolSpecificRules, isDefaultMode);
+  }
+}
+
+const GET_PROJECTS_DEFAULT_FIELDS = [
+  'id',
+  'name',
+  'description',
+  'priorityLevel',
+  'dueDate', // Date formatting to be handled in Subtask 2.2
+  'status.name',
+  'completedTime', // Date formatting to be handled in Subtask 2.2
+  'taskCount'
+];
+
+const GET_PROJECTS_TOOL_SPECIFIC_RULES = {
+  'dueDate': { postProcessField: (value: string | null | undefined) => formatDateToYYYYMMDD(value) },
+  'completedTime': { postProcessField: (value: string | null | undefined) => value ? formatDateToYYYYMMDD(value) : null },
+  'manager': { // As per PRD 2.1 for get_projects
+    optionalContainerSimplification: (managerObj: any) => managerObj ? { 'manager.name': managerObj.name } : { 'manager.name': null }
+  }
+};
+
+// PRD 2.2: Recommended Default Fields for get_projects_by_projectId
+const GET_PROJECT_BY_ID_DEFAULT_FIELDS = [
+  'id',
+  'name',
+  'description',
+  'workspaceId',
+  'priorityLevel',
+  'dueDate',
+  'startDate',
+  'completedTime'
+];
+
+// PRD 2.2: Tool specific rules for get_projects_by_projectId
+const GET_PROJECT_BY_ID_TOOL_SPECIFIC_RULES = {
+  'dueDate': { postProcessField: (value: string | null | undefined) => formatDateToYYYYMMDD(value) },
+  'startDate': { postProcessField: (value: string | null | undefined) => formatDateToYYYYMMDD(value) },
+  'completedTime': { postProcessField: (value: string | null | undefined) => value ? formatDateToYYYYMMDD(value) : null },
+  // PRD 2.2: Optional Field Simplification Default for manager
+  'manager': { 
+    optionalContainerSimplification: (managerObj: any) => managerObj && managerObj.name ? { 'manager.name': managerObj.name } : { 'manager.name': null }
+  }
+};
+
+// PRD 2.3: Recommended Default Fields for get_tasks_by_taskId
+const GET_TASK_BY_ID_DEFAULT_FIELDS = [
+  'id',
+  'name',
+  'status.name', // Assuming status is an object with a name property
+  'priority',
+  'dueDate', 
+  'scheduledStart',
+  'scheduledEnd',
+  'duration',
+  'completed',
+  'project.name' // Assuming project is an object with a name property
+];
+
+// PRD 2.3: Tool specific rules for get_tasks_by_taskId
+const GET_TASK_BY_ID_TOOL_SPECIFIC_RULES = {
+  'dueDate': { postProcessField: (value: string | null | undefined) => formatDateToYYYYMMDD(value) },
+  // PRD 2.3: Optional Field Simplification Defaults
+  'creator': {
+    optionalContainerSimplification: (creatorObj: any) => creatorObj && creatorObj.name ? { 'creator.name': creatorObj.name } : { 'creator.name': null }
+  },
+  'workspace': {
+    optionalContainerSimplification: (workspaceObj: any) => workspaceObj && workspaceObj.name ? { 'workspace.name': workspaceObj.name } : { 'workspace.name': null }
+  },
+  'project': {
+    optionalContainerSimplification: (projectObj: any) => projectObj && projectObj.name ? { 'project.name': projectObj.name } : { 'project.name': null }
+  }
+  // Assignees array simplification will be added in Subtask 4.4
+};
+
+// PRD 2.4: Fixed fields for get_statuses
+const GET_STATUSES_FIXED_FIELDS = [
+  'name',
+  'isDefaultStatus',
+  'isResolvedStatus'
+];
+
+// PRD 2.5: Fixed fields for get_users_me
+const GET_USERS_ME_FIXED_FIELDS = [
+  'id',
+  'name',
+  'email'
+];
+
+// PRD 2.6: Fixed fields for get_users
+const GET_USERS_FIXED_FIELDS = [
+  'id',
+  'name',
+  'email'
+];
+
+// PRD 2.7: Default fields for get_workspaces
+const GET_WORKSPACES_DEFAULT_FIELDS = [
+  'id',
+  'name'
+];
+
+// PRD 2.3 / Task 13.1: Default fields for get_tasks, aligning with get_tasks_by_taskId
+const GET_TASKS_DEFAULT_FIELDS = [
+  'id',
+  'name',
+  'status.name', 
+  'priority',
+  'dueDate', 
+  'scheduledStart',
+  'scheduledEnd',
+  'duration',
+  'completed',
+  'project.name'
+];
+
+// Task 13.2: Tool specific rules for get_tasks
+const GET_TASKS_TOOL_SPECIFIC_RULES = {
+  // Date formatting rules for relevant fields present in a task object
+  'dueDate': { postProcessField: (value: string | null | undefined) => formatDateToYYYYMMDD(value) },
+  'completedTime': { postProcessField: (value: string | null | undefined) => value ? formatDateToYYYYMMDD(value) : null },
+  'startOn': { postProcessField: (value: string | null | undefined) => formatDateToYYYYMMDD(value) },
+  'scheduledStart': { postProcessField: (value: string | null | undefined) => formatDateToYYYYMMDD(value) },
+  'scheduledEnd': { postProcessField: (value: string | null | undefined) => formatDateToYYYYMMDD(value) },
+  'createdTime': { postProcessField: (value: string | null | undefined) => formatDateToYYYYMMDD(value) }, 
+  'updatedTime': { postProcessField: (value: string | null | undefined) => formatDateToYYYYMMDD(value) }, 
+  'lastInteractedTime': { postProcessField: (value: string | null | undefined) => formatDateToYYYYMMDD(value) },
+
+  // Optional container simplification rules (as per PRD 1.3.1 and 2.3)
+  'creator': {
+    optionalContainerSimplification: (creatorObj: any) => creatorObj && creatorObj.name ? { 'creator.name': creatorObj.name } : { 'creator.name': null }
+  },
+  'workspace': {
+    optionalContainerSimplification: (workspaceObj: any) => workspaceObj && workspaceObj.name ? { 'workspace.name': workspaceObj.name } : { 'workspace.name': null }
+  },
+  'project': {
+    optionalContainerSimplification: (projectObj: any) => projectObj && projectObj.name ? { 'project.name': projectObj.name } : { 'project.name': null }
+  },
+
+  // Default/Optional item simplification for arrays (PRD 1.2.2, 2.3)
+  'assignees': {
+    defaultItemSimplification: (assignee: any) => assignee && assignee.name ? { name: assignee.name } : {}
+  },
+  'chunks': {
+    defaultItemSimplification: (chunk: any) => {
+      if (!chunk) return {};
+      // Return all original properties of the chunk, but format dates within it
+      return {
+        ...chunk,
+        scheduledStart: formatDateToYYYYMMDD(chunk.scheduledStart),
+        scheduledEnd: formatDateToYYYYMMDD(chunk.scheduledEnd),
+        completedTime: chunk.completedTime ? formatDateToYYYYMMDD(chunk.completedTime) : null
+      };
+    }
+  }
+  // `labels` is an array of strings, so no item simplification needed.
+};
 
 const server = new McpServer({
   name: 'Motion AI Assistant',
@@ -51,6 +424,47 @@ function parameterizeEndpoint(endpoint: string, parameters: Record<string, any>)
 }
 
 async function callApi(endpoint: string, method: string, body?: any, contentType?: string) {
+  // Check rate limit only for calls to the Motion API (baseUrl)
+  // Construct the full URL to check against baseUrl. 
+  // The `endpoint` parameter to callApi is usually a path like '/projects', not a full URL.
+  const fullUrl = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
+
+  if (fullUrl.startsWith(baseUrl)) {
+    const { allowed, waitTimeMs } = rateLimiter.checkAndRecordCall();
+    if (!allowed && waitTimeMs !== undefined) { // Ensure waitTimeMs is defined before using it
+      const waitTimeSec = Math.ceil(waitTimeMs / 1000);
+      console.warn(`Motion API rate limit reached. Please wait ${waitTimeSec} seconds before trying again.`);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              error: 'Rate Limit Exceeded',
+              details: `Motion API rate limit reached. Please wait ${waitTimeSec} seconds before trying again.`,
+              waitTimeSeconds: waitTimeSec
+            })
+          }
+        ],
+        isError: true
+      };
+    } else if (!allowed) {
+        // Fallback if waitTimeMs is somehow undefined but call is not allowed
+        console.warn(`Motion API rate limit reached. Please wait before trying again.`);
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: JSON.stringify({
+                        error: 'Rate Limit Exceeded',
+                        details: `Motion API rate limit reached. Please wait a few minutes before trying again.`
+                    })
+                }
+            ],
+            isError: true
+        };
+    }
+  }
+
   const headers: Record<string, string> = {};
   if (contentType) {
     headers['Content-Type'] = contentType;
@@ -234,17 +648,79 @@ registerTool(
 /* Retrieve Project */
 registerTool(
   'get_projects_by_projectId',
-  'Retrieve Project',
+  `Retrieves detailed information for a single project, specified by its ID.
+Use the \`fields\` parameter to select the exact information you need.
+
+**Available Response Fields:**
+
+1.  **Simple Fields** (directly accessible):
+    *   \`id\`, \`name\`, \`description\`, \`workspaceId\`, \`priorityLevel\`
+    *   \`dueDate\` (Note:YYYY-MM-DD format)
+    *   \`startDate\` (Note:YYYY-MM-DD format)
+    *   \`completedTime\` (Note:YYYY-MM-DD format, or null if not completed)
+
+2.  **Nested Object Fields** (use dot notation):
+    *   \`manager.name\` (Note: To get the manager\'s name, include \"manager\" in your \`fields\` request, e.g., \`fields: [\"manager\"]\`. The response will then contain \`manager.name\` with the name, or null if no manager is assigned.)
+
+**Examples:**
+- For core project details: \`fields: [\"id\", \"name\", \"description\", \"dueDate\"]\`
+- To include the manager\'s name: \`fields: [\"id\", \"name\", \"manager\"]\`
+
+**Default Fields** (if \`fields\` parameter is not provided):
+${GET_PROJECT_BY_ID_DEFAULT_FIELDS.join(', ')}`,
   {
-    projectId: z.string()
+    projectId: z.string().describe('The ID of the project to retrieve.'),
+    fields: z.array(z.string()).optional().describe('Optional. Specify which fields to include in the response. Uses defaults if not provided.')
   },
   async (params) => {
     try {
       const validatedParams = z.object({
-    projectId: z.string()
-  }).parse(params);
-      const endpoint = parameterizeEndpoint('/projects/{projectId}', validatedParams);
-      return callApi(endpoint, 'GET');
+        projectId: z.string().describe('The ID of the project to retrieve.'),
+        fields: z.array(z.string()).optional()
+      }).parse(params);
+      
+      const endpoint = parameterizeEndpoint('/projects/{projectId}', { projectId: validatedParams.projectId });
+      const apiResponseWrapper = await callApi(endpoint, 'GET');
+
+      // Handle potential API error from callApi
+      if (apiResponseWrapper.isError) {
+        return apiResponseWrapper; // Return the error response directly
+      }
+
+      let rawProjectData;
+      try {
+        rawProjectData = JSON.parse(apiResponseWrapper.content[0].text);
+      } catch (e) {
+        console.error(`Failed to parse project data for projectId ${validatedParams.projectId}:`, e);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ error: 'API Response Error', details: 'Failed to parse project data' })
+            }
+          ],
+          isError: true
+        };
+      }
+
+      // TODO (Subtask 3.1 cont.): Integrate selectFieldsFromData here using GET_PROJECT_BY_ID_DEFAULT_FIELDS
+      // and later GET_PROJECT_BY_ID_TOOL_SPECIFIC_RULES (Subtask 3.2 & 3.3)
+      const processedData = selectFieldsFromData(
+        rawProjectData, 
+        validatedParams.fields, 
+        GET_PROJECT_BY_ID_DEFAULT_FIELDS,
+        GET_PROJECT_BY_ID_TOOL_SPECIFIC_RULES
+      );
+
+      return { 
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(processedData)
+          }
+        ]
+      };
+
     } catch (error) {
       if (error instanceof z.ZodError) {
         return {
@@ -264,19 +740,107 @@ registerTool(
 /* List Projects */
 registerTool(
   'get_projects',
-  'List Projects',
+  `Lists projects for a specified workspace.
+You can customize the information returned for each project using the \`fields\` parameter.
+Supports pagination using the \`cursor\` parameter.
+
+**Available Response Fields:**
+
+1.  **Simple Fields** (directly accessible):
+    *   \`id\`, \`name\`, \`description\`, \`priorityLevel\`
+    *   \`dueDate\` (Note:YYYY-MM-DD format)
+    *   \`completedTime\` (Note:YYYY-MM-DD format, or null if not completed)
+    *   \`taskCount\`
+    *   \`workspaceId\`
+
+2.  **Nested Object Fields** (use dot notation):
+    *   \`status.name\` (e.g., \"In Progress\" - this is the project\'s overall status)
+    *   \`manager.name\` (Note: To get the manager\'s name, include \"manager\" in your \`fields\` request, e.g., \`fields: [\"manager\"]\`. The response will then contain \`manager.name\` with the name, or null if no manager is assigned.)
+
+3.  **Meta Object** (for pagination):
+    *   \`meta.cursor\` (Note: If more projects are available, this field will contain a cursor string. Pass this string to the \`cursor\` parameter in your next call to fetch the subsequent set of projects.)
+
+**Examples:**
+- For a basic list view: \`fields: [\"id\", \"name\", \"status.name\"]\`
+- To include manager\'s name and due date: \`fields: [\"id\", \"name\", \"dueDate\", \"manager\"]\`
+- For description and task count: \`fields: [\"id\", \"name\", \"description\", \"taskCount\"]\`
+
+**Default Fields** (if \`fields\` parameter is not provided):
+${GET_PROJECTS_DEFAULT_FIELDS.join(', ')}`,
   {
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
-    workspaceId: z.string()
+    workspaceId: z.string().describe('The ID of the workspace to list projects from.'),
+    fields: z.array(z.string()).optional().describe('Optional. Specify which fields to include in the response. Uses defaults if not provided.')
   },
   async (params) => {
     try {
       const validatedParams = z.object({
-    cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
-    workspaceId: z.string()
-  }).parse(params);
-      const endpoint = parameterizeEndpoint('/projects', validatedParams);
-      return callApi(endpoint, 'GET');
+        cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
+        workspaceId: z.string().describe('The ID of the workspace to list projects from.'),
+        fields: z.array(z.string()).optional()
+      }).parse(params);
+      
+      // Exclude 'fields' from parameters sent to the API endpoint
+      const { fields, ...apiParams } = validatedParams;
+      
+      const endpoint = parameterizeEndpoint('/projects', apiParams);
+      const apiResponseWrapper = await callApi(endpoint, 'GET');
+
+      // Handle potential API error from callApi
+      if (apiResponseWrapper.isError) {
+        return apiResponseWrapper; // Return the error response directly
+      }
+
+      let rawProjectsData;
+      try {
+        rawProjectsData = JSON.parse(apiResponseWrapper.content[0].text);
+      } catch (e) {
+        console.error("Failed to parse projects API response:", e);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ error: 'API Response Error', details: 'Failed to parse projects data' })
+            }
+          ],
+          isError: true
+        };
+      }
+
+      // PRD indicates the API returns an object like { projects: [], meta: {} }
+      // We need to pass the actual array of projects to selectFieldsFromData
+      const projectsArray = rawProjectsData?.projects;
+
+      if (!Array.isArray(projectsArray)) {
+         console.error("API response for /projects did not contain a projects array.", rawProjectsData);
+         return {
+           content: [
+             {
+               type: 'text',
+               text: JSON.stringify({ error: 'API Response Error', details: 'Projects data is not in expected format' })
+             }
+           ],
+           isError: true
+         };
+      }
+
+      // Call selectFieldsFromData with the array of projects
+      // toolSpecificRules for manager simplification and date formatting will be added in Subtask 2.2
+      const processedData = selectFieldsFromData(projectsArray, fields, GET_PROJECTS_DEFAULT_FIELDS, GET_PROJECTS_TOOL_SPECIFIC_RULES); 
+
+      // Re-wrap the processed data in the original structure if meta data is important
+      // For now, returning the processed array directly. This might need adjustment based on how AI consumes it.
+      return {
+        content: [
+          {
+            type: 'text',
+            // If rawProjectsData.meta exists, we might want to include it.
+            // For now, just returning the processed projects array in a top-level 'projects' key for consistency.
+            text: JSON.stringify({ projects: processedData, meta: rawProjectsData.meta || {} })
+          }
+        ]
+      };
+
     } catch (error) {
       if (error instanceof z.ZodError) {
         return {
@@ -672,17 +1236,66 @@ registerTool(
 /* List statuses for a workspace */
 registerTool(
   'get_statuses',
-  'List statuses for a workspace',
+  `Lists all available task statuses for a given workspace.\nThis tool always returns an array of status objects, and each object contains the following fixed fields:\n- \`name\`: The name of the status (e.g., \"Todo\", \"In Progress\").\n- \`isDefaultStatus\`: A boolean indicating if this is the default status for new tasks in the workspace.\n- \`isResolvedStatus\`: A boolean indicating if tasks with this status are considered resolved/completed.\n\nThis tool does *not* support the \`fields\` parameter.`,
   {
-    workspaceId: z.string()
+    workspaceId: z.string().describe('The ID of the workspace for which to retrieve statuses.')
   },
   async (params) => {
     try {
       const validatedParams = z.object({
-    workspaceId: z.string()
-  }).parse(params);
-      const endpoint = parameterizeEndpoint('/statuses', validatedParams);
-      return callApi(endpoint, 'GET');
+        workspaceId: z.string()
+      }).parse(params);
+      
+      const endpoint = parameterizeEndpoint('/statuses', { workspaceId: validatedParams.workspaceId });
+      const apiResponseWrapper = await callApi(endpoint, 'GET');
+
+      if (apiResponseWrapper.isError) {
+        return apiResponseWrapper;
+      }
+
+      let rawStatusesData;
+      try {
+        // The API likely returns an object like { statuses: [] }
+        // or directly an array. We need to handle this. Assuming an array directly for now, or object with statuses key.
+        const parsedResponse = JSON.parse(apiResponseWrapper.content[0].text);
+        if (Array.isArray(parsedResponse)) {
+          rawStatusesData = parsedResponse;
+        } else if (parsedResponse && Array.isArray(parsedResponse.statuses)) {
+          rawStatusesData = parsedResponse.statuses;
+        } else {
+          throw new Error('Response format not recognized or statuses array missing');
+        }
+      } catch (e: any) {
+        console.error(`Failed to parse statuses data for workspace ${validatedParams.workspaceId}:`, e.message);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ error: 'API Response Error', details: `Failed to parse statuses data: ${e.message}` })
+            }
+          ],
+          isError: true
+        };
+      }
+
+      // Subtask 5.2 will use selectFieldsFromData here with GET_STATUSES_FIXED_FIELDS
+      const processedData = selectFieldsFromData(
+        rawStatusesData,
+        GET_STATUSES_FIXED_FIELDS, // Use fixed fields as per PRD 2.4
+        GET_STATUSES_FIXED_FIELDS  // Defaults are the same as fixed fields
+      );
+
+      return {
+        content: [
+          {
+            type: 'text',
+            // If the original response was wrapped (e.g. {statuses: [], meta: {}}), re-wrap if necessary.
+            // For now, returning the processed array directly.
+            text: JSON.stringify(processedData) 
+          }
+        ]
+      };
+
     } catch (error) {
       if (error instanceof z.ZodError) {
         return {
@@ -702,68 +1315,126 @@ registerTool(
 /* Update a Task */
 registerTool(
   'patch_tasks_by_taskId',
-  'Update a Task',
+  `Updates an existing task identified by its unique ID. You can modify various attributes of the task such as its name, due date, assignee, status, and more. This tool supports partial updates, meaning only the fields you provide in the request body will be changed.\\n\\n**Request Parameters:**\\n\\n*   \\\`taskId\\\` (string, required): The unique identifier of the task you want to update.\\n*   \\\`fields\\\` (array of strings, optional): Specify which fields of the updated task object should be included in the response. If omitted, a default set of fields (identical to those returned by the \\\`get_tasks_by_taskId\\\` tool) will be provided.\\n*   \\\`body\\\` (object, required): An object containing the task attributes you wish to update. Provide only the fields you want to change:\\n    *   \\\`name\\\` (string, optional): The new name or title for the task.\\n    *   \\\`dueDate\\\` (string, optional): The task's new due date. Accepts YYYY-MM-DD format or a full ISO 8601 timestamp. This can be crucial for auto-scheduling.\\n    *   \\\`assigneeId\\\` (string or null, optional): The ID of the user to assign the task to. To unassign the task, provide \\\`null\\\`.\\n    *   \\\`duration\\\` (number or string, optional): The task's duration. This can be an integer representing minutes (e.g., 30 for 30 minutes), or specific string values like \"NONE\" (for no duration) or \"REMINDER\" (for a reminder task).\\n    *   \\\`status\\\` (string, optional): The new status name for the task (e.g., \"In Progress\", \"Completed\"). Ensure the status exists in the workspace.\\n    *   \\\`autoScheduled\\\` (object or null, optional): An object to configure auto-scheduling for the task, or \\\`null\\\` to disable auto-scheduling.\\n        *   If an object is provided, it can contain:\\n            *   \\\`startDate\\\` (string, optional): The date when auto-scheduling should begin (YYYY-MM-DD or ISO 8601).\\n            *   \\\`deadlineType\\\` (string, optional): The type of deadline for auto-scheduling (e.g., \"SOFT\", \"HARD\").\\n            *   \\\`schedule\\\` (string, optional): The name or ID of a specific schedule to use.\\n        *   Note: The task's target status must have auto-scheduling enabled in Motion for these settings to take effect.\\n    *   \\\`projectId\\\` (string, optional): The ID of the project to associate this task with.\\n    *   \\\`description\\\` (string, optional): The updated task description, which can include GitHub Flavored Markdown.\\n    *   \\\`priority\\\` (string, optional): The task's priority level. Valid values are \"ASAP\", \"HIGH\", \"MEDIUM\", \"LOW\".\\n    *   \\\`labels\\\` (array of strings, optional): An array of label names to set on the task. This will replace any existing labels on the task.\\n\\n**Response Structure:**\\n\\nUpon successful execution, this tool returns the **complete updated task object**. The specific fields included in this object depend on the optional \\\`fields\\\` parameter you provide in the request:\\n*   If you use the \\\`fields\\\` parameter, only the fields you specify will be returned.\\n*   If the \\\`fields\\\` parameter is omitted or empty, a default set of task fields will be returned.\\n\\n**The \"Available Response Fields\" for the updated task object, their data types, and how to access nested information (e.g., \\\`status.name\\\`, \\\`project.name\\\`, simplified \\\`creator.name\\\`, or array contents like \\\`assignees\\\`) are identical to those provided by the \\\`get_tasks_by_taskId\\\` tool.** Please refer to the documentation for \\\`get_tasks_by_taskId\\\` for a comprehensive list and detailed explanations of all possible response fields.\\n\\nIf the update operation fails (e.g., due to a validation error on the input, an issue with the Motion API, or if the task ID is not found), the tool will return an object in the format: \\\`{ \"status\": \"FAILURE\", \"id\": \"TASK_ID_OR_NULL\" }\\\`. The \\\`id\\\` will be the \\\`taskId\\\` you provided if the failure occurred after identifying the task, or \\\`null\\\` if the failure was more general.\\n\\n**Examples:**\\n\\n1.  **Update task name and priority:**\\n    \\\`\\\`\\\`json\\n    {\\n      \"taskId\": \"task_123abc\",\\n      \"body\": {\\n        \"name\": \"Finalize Q3 Report Document\",\\n        \"priority\": \"HIGH\"\\n      }\\n    }\\n    \\\`\\\`\\\`\\n\\n2.  **Change due date, assign to a user, and request specific fields in response:**\\n    \\\`\\\`\\\`json\\n    {\\n      \"taskId\": \"task_456def\",\\n      \"fields\": [\"id\", \"name\", \"dueDate\", \"assignees\"],\\n      \"body\": {\\n        \"dueDate\": \"2024-09-15\",\\n        \"assigneeId\": \"user_789xyz\"\\n      }\\n    }\\n    \\\`\\\`\\\`\\n\\n3.  **Disable auto-scheduling for a task:**\\n    \\\`\\\`\\\`json\\n    {\\n      \"taskId\": \"task_789ghi\",\\n      \"body\": {\\n        \"autoScheduled\": null\\n      }\\n    }\\n    \\\`\\\`\\\`\\n\\n4.  **Update description and add labels:**\\n    \\\`\\\`\\\`json\\n    {\\n      \"taskId\": \"task_101jkl\",\\n      \"body\": {\\n        \"description\": \"Remember to attach the appendix.\\\\n- Item 1\\\\n- Item 2\",\\n        \"labels\": [\"urgent\", \"review-needed\"]\\n      }\\n    }\\n    \\\`\\\`\\\`\\nThe response is the updated task object, formatted based on the \\\`fields\\\` parameter or defaults (similar to get_tasks_by_taskId).\\`,
   {
     taskId: z.string(),
+    fields: z.array(z.string()).optional().describe('Optional. Specify which fields to include in the response. Uses defaults if not provided.'),
     body: z.object({
-      name: z.string().optional(),
-      dueDate: z.string().optional(),
-      assigneeId: z.string().nullable().optional(),
-      duration: z.any().optional(),
-      status: z.string().optional(),
+      name: z.string().optional().describe("The new title of the task."),
+      dueDate: z.string().optional().describe("ISO 8601 string for the task\'s due date. Can be required for certain auto-scheduling configurations."),
+      assigneeId: z.string().nullable().optional().describe("The ID of the user to assign the task to. Set to null to unassign."),
+      duration: z.union([z.string(), z.number()]).optional().describe("Task duration: an integer in minutes (e.g., 30), or specific strings like \'NONE\' or \'REMINDER\'."),
+      status: z.string().optional().describe("The new status for the task. If not provided, defaults to the workspace default or remains unchanged."),
       autoScheduled: z.object({
-        startDate: z.string().optional(),
-        deadlineType: z.string().optional(),
-        schedule: z.string().optional()
-      }).nullable().optional(),
-      projectId: z.string().optional(),
-      description: z.string().optional(),
-      priority: z.string().optional(),
-      labels: z.array(z.string()).optional()
+        startDate: z.string().optional().describe("The date when auto-scheduling should begin (ISO 8601 string)."),
+        deadlineType: z.string().optional().describe("The type of deadline for auto-scheduling (e.g., \'SOFT\', \'HARD\'."),
+        schedule: z.string().optional().describe("The name or ID of the specific schedule to use for auto-scheduling.")
+      }).nullable().optional().describe("Object to configure auto-scheduling, or null to disable. Task\'s status must have auto-scheduling enabled."),
+      projectId: z.string().optional().describe("The ID of the project to associate the task with."),
+      description: z.string().optional().describe("The task\'s description, in GitHub Flavored Markdown."),
+      priority: z.string().optional().describe('Set the task\'s priority. Valid values: "ASAP", "HIGH", "MEDIUM", "LOW".'),
+      labels: z.array(z.string()).optional().describe("An array of label names to set on the task. This will typically replace existing labels.")
     })
   },
   async (params) => {
+    const originalTaskId = params.taskId; // Store for error reporting
     try {
       const validatedParams = z.object({
         taskId: z.string(),
+        fields: z.array(z.string()).optional(), // Validate fields parameter
         body: z.object({
-          name: z.string().optional(),
-          dueDate: z.string().optional(),
-          assigneeId: z.string().nullable().optional(),
-          duration: z.any().optional(),
-          status: z.string().optional(),
+          name: z.string().optional().describe("The new title of the task."),
+          dueDate: z.string().optional().describe("ISO 8601 string for the task\'s due date. Can be required for certain auto-scheduling configurations."),
+          assigneeId: z.string().nullable().optional().describe("The ID of the user to assign the task to. Set to null to unassign."),
+          duration: z.union([z.string(), z.number()]).optional().describe("Task duration: an integer in minutes (e.g., 30), or specific strings like \'NONE\' or \'REMINDER\'."),
+          status: z.string().optional().describe("The new status for the task. If not provided, defaults to the workspace default or remains unchanged."),
           autoScheduled: z.object({
-            startDate: z.string().optional(),
-            deadlineType: z.string().optional(),
-            schedule: z.string().optional()
-          }).nullable().optional(),
-          projectId: z.string().optional(),
-          description: z.string().optional(),
-          priority: z.string().optional(),
-          labels: z.array(z.string()).optional()
+            startDate: z.string().optional().describe("The date when auto-scheduling should begin (ISO 8601 string)."),
+            deadlineType: z.string().optional().describe("The type of deadline for auto-scheduling (e.g., \'SOFT\', \'HARD\'."),
+            schedule: z.string().optional().describe("The name or ID of the specific schedule to use for auto-scheduling.")
+          }).nullable().optional().describe("Object to configure auto-scheduling, or null to disable. Task\'s status must have auto-scheduling enabled."),
+          projectId: z.string().optional().describe("The ID of the project to associate the task with."),
+          description: z.string().optional().describe("The task\'s description, in GitHub Flavored Markdown."),
+          priority: z.string().optional().describe('Set the task\'s priority. Valid values: "ASAP", "HIGH", "MEDIUM", "LOW".'),
+          labels: z.array(z.string()).optional().describe("An array of label names to set on the task. This will typically replace existing labels.")
         })
       }).parse(params);
       
-      // Extrahiere taskId und body aus validatedParams
-      const { taskId, body } = validatedParams;
+      const { taskId, body, fields } = validatedParams;
       
-      // Verwende taskId für die URL-Pfad-Parameter
       const endpoint = parameterizeEndpoint('/tasks/{taskId}', { taskId });
-      
-      // Sende nur den body-Inhalt an die API
-      return callApi(endpoint, 'PATCH', body, 'application/json');
-    } catch (error) {
-      if (error instanceof z.ZodError) {
+      const apiResponseWrapper = await callApi(endpoint, 'PATCH', body, 'application/json');
+
+      if (apiResponseWrapper.isError) {
+        // API call failed (e.g., network error, Motion API error like 4xx/5xx)
+        // callApi already wraps the error from Motion, so we use that if available
+        // Otherwise, construct the specific failure response
+        let errorDetails = 'API call failed during PATCH.';
+        if (apiResponseWrapper.content && apiResponseWrapper.content[0] && apiResponseWrapper.content[0].text) {
+            try {
+                const parsedError = JSON.parse(apiResponseWrapper.content[0].text);
+                errorDetails = parsedError.details || parsedError.error || errorDetails;
+            } catch (e) {
+                // Keep default errorDetails if parsing fails
+            }
+        }
+        console.error(`patch_tasks_by_taskId: API call failed for taskId ${taskId}. Details: ${errorDetails}`);
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ error: 'Validation error', details: error.errors })
+              text: JSON.stringify({ status: 'FAILURE', id: taskId })
             }
           ]
         };
       }
-      throw error;
+      
+      // Assuming PATCH returns the full updated task object, as per required_tools.md example for Tool 11
+      let updatedTaskData;
+      try {
+        updatedTaskData = JSON.parse(apiResponseWrapper.content[0].text);
+      } catch (e) {
+        console.error(`patch_tasks_by_taskId: Failed to parse successful PATCH response for taskId ${taskId}:`, e);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ status: 'FAILURE', id: taskId })
+            }
+          ]
+        };
+      }
+
+      // Process the updated task data using selectFieldsFromData
+      // This aligns with get_tasks_by_taskId behavior as per PRD 2.9
+      const processedData = selectFieldsFromData(
+        updatedTaskData,
+        fields, // User-specified fields or undefined for default
+        GET_TASK_BY_ID_DEFAULT_FIELDS,
+        GET_TASK_BY_ID_TOOL_SPECIFIC_RULES
+      );
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(processedData) // Return the processed task data
+          }
+        ]
+      };
+
+    } catch (error) {
+      // Catches Zod validation errors or other unexpected errors
+      console.error(`Error in patch_tasks_by_taskId handler for taskId ${originalTaskId}:`, error);
+      return {
+        content: [
+          {
+            type: 'text',
+            // Ensure originalTaskId is used here if validatedParams.taskId is not available due to validation failure
+            text: JSON.stringify({ status: 'FAILURE', id: originalTaskId }) 
+          }
+        ]
+      };
     }
   }
 );
@@ -771,17 +1442,58 @@ registerTool(
 /* Retrieve a Task */
 registerTool(
   'get_tasks_by_taskId',
-  'Retrieve a Task',
+  `Retrieves detailed information for a single task, specified by its ID.\nUse the \`fields\` parameter to select the exact information you need.\n\n**Available Response Fields:**\n\n1.  **Simple Fields** (directly accessible):\n    *   \`id\`, \`name\`, \`description\`, \`duration\`, \`dueDate\` (YYYY-MM-DD format),\n    *   \`deadlineType\`, \`completed\` (boolean), \`completedTime\` (YYYY-MM-DD format, or null if not completed),\n    *   \`updatedTime\`, \`startOn\` (YYYY-MM-DD format), \`priority\`, \`scheduledStart\` (timestamp or null),\n    *   \`scheduledEnd\` (timestamp or null), \`schedulingIssue\` (boolean),\n    *   \`createdTime\`, \`lastInteractedTime\`.\n\n2.  **Nested Object Fields** (use dot notation for direct access to sub-fields):\n    *   \`creator.id\`, \`creator.name\`, \`creator.email\`\n    *   \`workspace.id\`, \`workspace.name\`, \`workspace.type\`\n    *   \`project.id\`, \`project.name\`, \`project.description\` (Note: if the task is associated with a project)\n    *   \`status.name\`, \`status.isDefaultStatus\`, \`status.isResolvedStatus\`\n    *   **Note on simplified access for certain objects:** If you request \`creator\`, \`workspace\`, or \`project\` directly in the \`fields\` parameter (e.g., \`fields: [\"creator\"]\`), you will receive a simplified object containing just the name (e.g., \`{\"creator.name\": \"Actual Creator Name\"}\`). To get all specific sub-fields listed above, request them explicitly using dot notation (e.g., \`fields: [\"creator.id\", \"creator.name\"]\`).\n\n3.  **Array Fields:**\n    *   \`assignees\` (Note: Requesting \`assignees\` via \`fields: [\"assignees\"]\` returns an array of objects, each simplified to contain just the assignee\'s name: \`[{ name: \'Assignee Name1\' }, ...]\`. For full assignee details, use the \`get_users\` tool with their IDs if needed.)\n    *   \`labels\` (Note: Returns an array of label strings associated with the task, e.g., \`[\"urgent\", \"bug\"]\`.)\n    *   \`chunks\` (Note: Returns an array of task chunks (scheduled time blocks). Each chunk object includes fields like \`id\`, \`duration\`, \`scheduledStart\` (timestamp), \`scheduledEnd\` (timestamp), \`completedTime\` (timestamp or null), \`isFixed\` (boolean). Dates within chunks are also formatted to YYYY-MM-DD where applicable by the underlying processing logic.)\n\n**Examples:**\n- For basic task information: \`fields: [\"id\", \"name\", \"status.name\", \"dueDate\"]\`\n- For scheduling details including chunks: \`fields: [\"id\", \"name\", \"scheduledStart\", \"scheduledEnd\", \"duration\", \"chunks\"]\`\n- To include creator name and assignee names: \`fields: [\"id\", \"name\", \"creator\", \"assignees\"]\`\n- To get specific project details: \`fields: [\"id\", \"name\", \"project.id\", \"project.name\"]\`\n\n**Default Fields** (if the \`fields\` parameter is not provided or is empty):\n${GET_TASK_BY_ID_DEFAULT_FIELDS.join(', ')}`,
   {
-    taskId: z.string()
+    taskId: z.string().describe('The unique identifier of the task to retrieve.'),
+    fields: z.array(z.string()).optional().describe('Optional. Specify which fields to include in the response. Uses defaults if not provided. See tool description for available fields and examples.')
   },
   async (params) => {
     try {
       const validatedParams = z.object({
-    taskId: z.string()
-  }).parse(params);
-      const endpoint = parameterizeEndpoint('/tasks/{taskId}', validatedParams);
-      return callApi(endpoint, 'GET');
+        taskId: z.string().describe('The unique identifier of the task to retrieve.'),
+        fields: z.array(z.string()).optional().describe('Optional. Specify which fields to include in the response. Uses defaults if not provided. See tool description for available fields and examples.')
+      }).parse(params);
+      
+      const endpoint = parameterizeEndpoint('/tasks/{taskId}', { taskId: validatedParams.taskId });
+      const apiResponseWrapper = await callApi(endpoint, 'GET');
+
+      if (apiResponseWrapper.isError) {
+        return apiResponseWrapper;
+      }
+
+      let rawTaskData;
+      try {
+        rawTaskData = JSON.parse(apiResponseWrapper.content[0].text);
+      } catch (e) {
+        console.error(`Failed to parse task data for taskId ${validatedParams.taskId}:`, e);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ error: 'API Response Error', details: 'Failed to parse task data' })
+            }
+          ],
+          isError: true
+        };
+      }
+
+      // Integrate selectFieldsFromData
+      const processedData = selectFieldsFromData(
+        rawTaskData, 
+        validatedParams.fields, 
+        GET_TASK_BY_ID_DEFAULT_FIELDS,
+        GET_TASK_BY_ID_TOOL_SPECIFIC_RULES
+      );
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(processedData)
+          }
+        ]
+      };
+
     } catch (error) {
       if (error instanceof z.ZodError) {
         return {
@@ -895,65 +1607,111 @@ registerTool(
  */
 registerTool(
   'post_tasks',
-  '## Description Input\n\nWhen passing in a task description, the input will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).\n',
+  `Creates a new task in a specified workspace.\n\n## Description Input\nWhen passing in a task description, the input will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).\n\n**Request Body Parameters:**\n- **Required:** \`name\` (string), \`workspaceId\` (string)\n- **Optional:** \`description\` (string), \`dueDate\` (string, YYYY-MM-DD or ISO 8601), \`duration\` (number in minutes, or string \"NONE\"/\"REMINDER\"), \`status\` (string, status name), \`priority\` (string: \"ASAP\", \"HIGH\", \"MEDIUM\", \"LOW\"), \`assigneeId\` (string, user ID), \`projectId\` (string), \`labels\` (array of strings), \`autoScheduled\` (object or null).\n\n**Response Format:**\nOn success, returns \`{ \"status\": \"SUCCESS\", \"id\": \"<NEW_TASK_ID>\" }\`.\nOn failure, returns \`{ \"status\": \"FAILURE\", \"id\": null }\`.`,
   {
     body: z.object({
-      dueDate: z.string().optional(),
-      duration: z.any().optional(),
-      status: z.string().optional(),
+      dueDate: z.string().optional().describe("Optional. Task due date in YYYY-MM-DD or ISO 8601 format."),
+      duration: z.any().optional().describe("Optional. Task duration in minutes (number) or specific strings like \'NONE\' or \'REMINDER\'."),
+      status: z.string().optional().describe("Optional. Name of the status to assign the task."),
       autoScheduled: z.object({
-        startDate: z.string().optional(),
-        deadlineType: z.string().optional(),
-        schedule: z.string().optional()
-      }).nullable().optional(),
-      name: z.string(),
-      projectId: z.string().optional(),
-      workspaceId: z.string(),
-      description: z.string().optional(),
-      priority: z.string().optional(),
-      labels: z.array(z.string()).optional(),
-      assigneeId: z.string().optional()
+        startDate: z.string().optional().describe("Date auto-scheduling should begin (YYYY-MM-DD or ISO 8601 format)."),
+        deadlineType: z.string().optional().describe("Type of deadline (e.g., \'SOFT\', \'HARD\')."),
+        schedule: z.string().optional().describe("Name or ID of the schedule to use.")
+      }).nullable().optional().describe("Optional. Object to configure auto-scheduling, or null to disable. Task\'s target status must allow auto-scheduling."),
+      name: z.string().describe("Required. The name/title of the task."),
+      projectId: z.string().optional().describe("Optional. ID of the project to associate the task with."),
+      workspaceId: z.string().describe("Required. The ID of the workspace where the task will be created."),
+      description: z.string().optional().describe("Optional. Task description in GitHub Flavored Markdown."),
+      priority: z.string().optional().describe("Optional. Task priority. Valid values: \'ASAP\', \'HIGH\', \'MEDIUM\', \'LOW\'. Defaults to MEDIUM if unspecified."),
+      labels: z.array(z.string()).optional().describe("Optional. Array of label names to assign to the task."),
+      assigneeId: z.string().optional().describe("Optional. ID of the user to assign the task to.")
     })
   },
   async (params) => {
     try {
       const validatedParams = z.object({
         body: z.object({
-          dueDate: z.string().optional(),
-          duration: z.any().optional(),
-          status: z.string().optional(),
+          dueDate: z.string().optional().describe("Optional. Task due date in YYYY-MM-DD or ISO 8601 format."),
+          duration: z.any().optional().describe("Optional. Task duration in minutes (number) or specific strings like \'NONE\' or \'REMINDER\'."),
+          status: z.string().optional().describe("Optional. Name of the status to assign the task."),
           autoScheduled: z.object({
-            startDate: z.string().optional(),
-            deadlineType: z.string().optional(),
-            schedule: z.string().optional()
-          }).nullable().optional(),
-          name: z.string(),
-          projectId: z.string().optional(),
-          workspaceId: z.string(),
-          description: z.string().optional(),
-          priority: z.string().optional(),
-          labels: z.array(z.string()).optional(),
-          assigneeId: z.string().optional()
+            startDate: z.string().optional().describe("Date auto-scheduling should begin (YYYY-MM-DD or ISO 8601 format)."),
+            deadlineType: z.string().optional().describe("Type of deadline (e.g., \'SOFT\', \'HARD\')."),
+            schedule: z.string().optional().describe("Name or ID of the schedule to use.")
+          }).nullable().optional().describe("Optional. Object to configure auto-scheduling, or null to disable. Task\'s target status must allow auto-scheduling."),
+          name: z.string().describe("Required. The name/title of the task."),
+          projectId: z.string().optional().describe("Optional. ID of the project to associate the task with."),
+          workspaceId: z.string().describe("Required. The ID of the workspace where the task will be created."),
+          description: z.string().optional().describe("Optional. Task description in GitHub Flavored Markdown."),
+          priority: z.string().optional().describe("Optional. Task priority. Valid values: \'ASAP\', \'HIGH\', \'MEDIUM\', \'LOW\'. Defaults to MEDIUM if unspecified."),
+          labels: z.array(z.string()).optional().describe("Optional. Array of label names to assign to the task."),
+          assigneeId: z.string().optional().describe("Optional. ID of the user to assign the task to.")
         })
       }).parse(params);
       
-      // Use empty object for query parameters since we're sending everything in the body
       const endpoint = parameterizeEndpoint('/tasks', {});
-      
-      // Pass only the body content to callApi, not the entire validatedParams
-      return callApi(endpoint, 'POST', validatedParams.body, 'application/json');
-    } catch (error) {
-      if (error instanceof z.ZodError) {
+      const apiResponseWrapper = await callApi(endpoint, 'POST', validatedParams.body, 'application/json');
+
+      if (apiResponseWrapper.isError) {
+        // callApi already includes error details, but PRD wants specific format for post_tasks failure
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ error: 'Validation error', details: error.errors })
+              text: JSON.stringify({ status: 'FAILURE', id: null })
             }
           ]
         };
       }
-      throw error;
+
+      // Assuming successful API call returns the created task object with an id
+      let createdTaskData;
+      try {
+        createdTaskData = JSON.parse(apiResponseWrapper.content[0].text);
+        if (createdTaskData && createdTaskData.id) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ status: 'SUCCESS', id: createdTaskData.id })
+              }
+            ]
+          };
+        } else {
+          // If API success but no ID or unexpected format
+          console.error('post_tasks: API success but ID missing in response', createdTaskData);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ status: 'FAILURE', id: null })
+              }
+            ]
+          };
+        }
+      } catch (e) {
+        console.error('post_tasks: Failed to parse successful API response', e);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ status: 'FAILURE', id: null })
+            }
+          ]
+        };
+      }
+
+    } catch (error) {
+      // Handles Zod validation errors and any other unexpected errors before/after API call
+      console.error('Error in post_tasks handler:', error);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ status: 'FAILURE', id: null })
+          }
+        ]
+      };
     }
   }
 );
@@ -1011,11 +1769,7 @@ registerTool(
 
 registerTool(
   'get_tasks',
-  `<!-- theme: warning -->
-
-> ### Note
->
-> By default, all tasks that are completed are left out unless specifically filtered for via the status.
+  `By default, all tasks that are completed are left out unless specifically filtered for via the status.
 
 **Available Response Fields:**
 
@@ -1031,17 +1785,18 @@ registerTool(
    - project.id, project.name, project.description, project.workspaceId
    - status.name, status.isDefaultStatus, status.isResolvedStatus
 
-3. **Array Fields** (use array notation):
-   - assignees[].id, assignees[].name, assignees[].email
-   - workspace.statuses[].name, workspace.statuses[].isDefaultStatus
+3. **Array Fields** (use array notation, see toolSpecificRules for simplifications):
+   - assignees[].id, assignees[].name, assignees[].email (default simplified to name)
+   - labels[] (array of strings)
+   - chunks[].id, chunks[].duration, chunks[].scheduledStart, chunks[].scheduledEnd, chunks[].completedTime, chunks[].isFixed
 
 **Examples:**
 - For basic task info: fields=["id", "name", "status.name", "priority"]
 - For scheduling: fields=["id", "scheduledStart", "scheduledEnd", "duration"]
-- For assignee details: fields=["id", "name", "assignees[].name"]
+- For assignee details: fields=["id", "name", "assignees"]
 
 **Default Fields** (if none specified):
-id, name, status.name, priority, dueDate, scheduledStart, scheduledEnd, duration, completed, project.name`,
+${GET_TASKS_DEFAULT_FIELDS.join(', ')}`,
   {
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
     label: z.string().optional().describe('Limit tasks returned by label on the task'),
@@ -1075,157 +1830,59 @@ id, name, status.name, priority, dueDate, scheduledStart, scheduledEnd, duration
       
       // Extract the actual API response data from the wrapper
       let apiResponse;
+      if (apiResponseWrapper.isError) {
+        return apiResponseWrapper; // Return error if API call failed
+      }
+
       if (apiResponseWrapper && 
           apiResponseWrapper.content && 
           Array.isArray(apiResponseWrapper.content) && 
           apiResponseWrapper.content[0] && 
           apiResponseWrapper.content[0].text) {
         try {
-          // This is the critical fix - properly extract the JSON data from the response
           apiResponse = JSON.parse(apiResponseWrapper.content[0].text);
         } catch (e) {
-          // If parsing fails, return the original response
-          return apiResponseWrapper;
+          console.error("get_tasks: Failed to parse API response", e);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ error: 'API Response Error', details: 'Failed to parse tasks data.' })
+              }
+            ],
+            isError: true
+          };
         }
-      } else if (apiResponseWrapper.isError) {
-        // If there was an error, return it
-        return apiResponseWrapper;
       } else {
-        // If format doesn't match expectations, return original
-        return apiResponseWrapper;
+        console.error("get_tasks: Invalid API response structure");
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ error: 'API Response Error', details: 'Invalid API response structure.' })
+            }
+          ],
+          isError: true
+        };
       }
-      
-      // Define default fields if none specified - using correct dot notation
-      const defaultFields = [
-        'id', 
-        'name', 
-        'status.name', 
-        'priority', 
-        'dueDate', 
-        'scheduledStart', 
-        'scheduledEnd', 
-        'duration', 
-        'completed', 
-        'project.name'
-      ];
-      
-      // Use provided fields or defaults
-      const requestedFields = fields || defaultFields;
       
       // Check if we have a valid response with tasks
       if (apiResponse && apiResponse.tasks && Array.isArray(apiResponse.tasks)) {
-        const transformedTasks = apiResponse.tasks.map(task => {
-          // Create empty transformed task object
-          const transformedTask = {};
-          
-          // Process each requested field
-          requestedFields.forEach(field => {
-            // Handle array access notation (e.g., "assignees[].name")
-            if (field.includes('[]')) {
-              const [arrayPath, propPath] = field.split('[].');
-              
-              // Get the array using path navigation if it's a nested path
-              let arrayObj = task;
-              const arrayPathParts = arrayPath.split('.');
-              
-              // Navigate to the array object
-              for (const part of arrayPathParts) {
-                if (arrayObj && typeof arrayObj === 'object' && part in arrayObj) {
-                  arrayObj = arrayObj[part];
-                } else {
-                  arrayObj = null;
-                  break;
-                }
-              }
-              
-              // Process array if it exists
-              if (arrayObj && Array.isArray(arrayObj)) {
-                // Extract the named property from each array item
-                transformedTask[field] = arrayObj.map(item => {
-                  if (item && typeof item === 'object') {
-                    // Handle nested properties in array items
-                    if (propPath.includes('.')) {
-                      const propParts = propPath.split('.');
-                      let propValue = item;
-                      
-                      for (const part of propParts) {
-                        if (propValue && typeof propValue === 'object' && part in propValue) {
-                          propValue = propValue[part];
-                        } else {
-                          propValue = null;
-                          break;
-                        }
-                      }
-                      
-                      return propValue;
-                    }
-                    
-                    // Simple property on array item
-                    return propPath in item ? item[propPath] : null;
-                  }
-                  return null;
-                });
-              } else {
-                transformedTask[field] = [];
-              }
-              return;
-            }
-            
-            // Handle dot notation for nested fields (including default fields)
-            if (field.includes('.')) {
-              const parts = field.split('.');
-              let current = task;
-              let valid = true;
-              
-              // Navigate through the object hierarchy
-              for (let i = 0; i < parts.length - 1; i++) {
-                if (current && typeof current === 'object' && parts[i] in current) {
-                  current = current[parts[i]];
-                } else {
-                  valid = false;
-                  break;
-                }
-              }
-              
-              // If we successfully navigated, get the final value
-              if (valid && current && typeof current === 'object') {
-                const finalPart = parts[parts.length - 1];
-                if (finalPart in current) {
-                  // Preserve the original field name with dots
-                  transformedTask[field] = current[finalPart];
-                } else {
-                  transformedTask[field] = null;
-                }
-              } else {
-                transformedTask[field] = null;
-              }
-              return;
-            }
-            
-            // Handle regular fields
-            if (field in task) {
-              // Special formatting for dates in default mode
-              if (field === 'dueDate' && !fields && task[field]) {
-                transformedTask[field] = String(task[field]).split('T')[0];
-              } else {
-                transformedTask[field] = task[field];
-              }
-            } else {
-              transformedTask[field] = null;
-            }
-          });
-          
-          return transformedTask;
-        });
+        // Use selectFieldsFromData for processing
+        const processedTasks = selectFieldsFromData(
+          apiResponse.tasks, 
+          fields, 
+          GET_TASKS_DEFAULT_FIELDS, 
+          GET_TASKS_TOOL_SPECIFIC_RULES // Use the new rules for get_tasks
+        );
         
-        // Return the transformed response in the expected format
         return {
           content: [
             {
               type: 'text',
               text: JSON.stringify({
-                meta: apiResponse.meta,
-                tasks: transformedTasks
+                meta: apiResponse.meta, // Preserve meta if it exists
+                tasks: processedTasks
               })
             }
           ],
@@ -1254,8 +1911,7 @@ id, name, status.name, priority, dueDate, scheduledStart, scheduledEnd, duration
               type: 'text',
               text: JSON.stringify({ error: 'Validation error', details: error.errors })
             }
-          ],
-          isError: true
+          ]
         };
       }
       throw error;
@@ -1355,21 +2011,78 @@ registerTool(
 /* List users */
 registerTool(
   'get_users',
-  'List users',
+  `Lists users, optionally filtered by workspace or team. Supports pagination via \`cursor\`.\nThe response is an object containing a \`users\` array and potentially a \`meta\` object for pagination.\nEach user object in the array *always* contains the following fixed fields:\n- \`id\`: The user\'s unique identifier.\n- \`name\`: The user\'s name.\n- \`email\`: The user\'s email address.\n\nIf more results are available, the \`meta.cursor\` field will contain a string to pass to the \`cursor\` parameter for the next page.\nThis tool does *not* support the \`fields\` parameter.`,
   {
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
-    workspaceId: z.string().optional(),
-    teamId: z.string().optional()
+    workspaceId: z.string().optional().describe("Optional. Filter users belonging to a specific workspace ID."),
+    teamId: z.string().optional().describe("Optional. Filter users belonging to a specific team ID.")
   },
   async (params) => {
     try {
       const validatedParams = z.object({
-    cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
-    workspaceId: z.string().optional(),
-    teamId: z.string().optional()
-  }).parse(params);
+        cursor: z.string().optional(),
+        workspaceId: z.string().optional(),
+        teamId: z.string().optional()
+      }).parse(params);
+      
       const endpoint = parameterizeEndpoint('/users', validatedParams);
-      return callApi(endpoint, 'GET');
+      const apiResponseWrapper = await callApi(endpoint, 'GET');
+
+      if (apiResponseWrapper.isError) {
+        return apiResponseWrapper;
+      }
+
+      let rawUsersResponse;
+      try {
+        rawUsersResponse = JSON.parse(apiResponseWrapper.content[0].text);
+      } catch (e: any) {
+        console.error('Failed to parse users list data:', e.message);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ error: 'API Response Error', details: `Failed to parse users data: ${e.message}` })
+            }
+          ],
+          isError: true
+        };
+      }
+
+      let processedUsers = [];
+      if (rawUsersResponse && Array.isArray(rawUsersResponse.users)) {
+        processedUsers = selectFieldsFromData(
+          rawUsersResponse.users, // Pass the array of users
+          GET_USERS_FIXED_FIELDS,
+          GET_USERS_FIXED_FIELDS
+        );
+      } else if (Array.isArray(rawUsersResponse)) { // If the API returns an array directly
+         processedUsers = selectFieldsFromData(
+          rawUsersResponse, 
+          GET_USERS_FIXED_FIELDS,
+          GET_USERS_FIXED_FIELDS
+        );
+        // In this case, there's no top-level 'meta' from the original response to preserve directly with the users array.
+        // The PRD implies the response should be an object with a 'users' key.
+        // So, we wrap it if it was a direct array.
+         return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ users: processedUsers })
+            }
+          ]
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ users: processedUsers, meta: rawUsersResponse.meta || {} })
+          }
+        ]
+      };
+
     } catch (error) {
       if (error instanceof z.ZodError) {
         return {
@@ -1381,7 +2094,16 @@ registerTool(
           ]
         };
       }
-      throw error;
+      console.error('Unexpected error in get_users:', error);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ error: 'Internal Server Error', details: 'An unexpected error occurred' })
+          }
+        ],
+        isError: true
+      };
     }
   }
 );
@@ -1389,14 +2111,51 @@ registerTool(
 /* Get My User */
 registerTool(
   'get_users_me',
-  'Get My User',
+  `Retrieves the profile information for the currently authenticated user (associated with the API key).\nThis tool always returns an object containing the following fixed fields:\n- \`id\`: The user\'s unique identifier.\n- \`name\`: The user\'s name.\n- \`email\`: The user\'s email address.\n\nThis tool does *not* support the \`fields\` parameter.`,
   {},
   async (params) => {
     try {
-      const validatedParams = z.object({}).parse(params);
-      const endpoint = parameterizeEndpoint('/users/me', validatedParams);
-      return callApi(endpoint, 'GET');
+      // No parameters to validate for this tool
+      const endpoint = parameterizeEndpoint('/users/me', {});
+      const apiResponseWrapper = await callApi(endpoint, 'GET');
+
+      if (apiResponseWrapper.isError) {
+        return apiResponseWrapper;
+      }
+
+      let rawUserData;
+      try {
+        rawUserData = JSON.parse(apiResponseWrapper.content[0].text);
+      } catch (e: any) {
+        console.error('Failed to parse current user data:', e.message);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ error: 'API Response Error', details: `Failed to parse user data: ${e.message}` })
+            }
+          ],
+          isError: true
+        };
+      }
+
+      const processedData = selectFieldsFromData(
+        rawUserData,
+        GET_USERS_ME_FIXED_FIELDS, // Use fixed fields as per PRD 2.5
+        GET_USERS_ME_FIXED_FIELDS  // Defaults are the same as fixed fields
+      );
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(processedData)
+          }
+        ]
+      };
+
     } catch (error) {
+      // Catching potential ZodError, though not expected here as no params are defined
       if (error instanceof z.ZodError) {
         return {
           content: [
@@ -1407,7 +2166,17 @@ registerTool(
           ]
         };
       }
-      throw error;
+      // General error handling for unexpected issues
+      console.error('Unexpected error in get_users_me:', error);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ error: 'Internal Server Error', details: 'An unexpected error occurred' })
+          }
+        ],
+        isError: true
+      };
     }
   }
 );
@@ -1415,19 +2184,81 @@ registerTool(
 /* List workspaces */
 registerTool(
   'get_workspaces',
-  'List workspaces',
+  `Lists workspaces the current user has access to. Supports filtering by specific \`ids\`, pagination via \`cursor\`, and response customization via \`fields\`.\n\n**Available Response Fields:**\n\n1.  **Simple Fields:** \`id\`, \`name\`, \`type\` (e.g., \"INDIVIDUAL\"), \`teamId\` (ID string or null).\n2.  **Array Fields:**\n    *   \`labels\`: An array of label strings defined for the workspace.\n    *   \`taskStatuses\`: An array of status objects available in the workspace. Each object includes fields like \`name\`, \`isDefaultStatus\`, \`isResolvedStatus\`.\n\n**Meta Object (for pagination):**\n*   \`meta.cursor\`: If present, use this value in the \`cursor\` parameter of a subsequent call to fetch the next page of workspaces.\n\n**Examples:**\n- To get default info (id, name) for all workspaces: call without \`fields\`.\n- To get defaults plus task statuses: \`fields: [\"id\", \"name\", \"taskStatuses\"]\`\n- To get workspace type and labels: \`fields: [\"id\", \"name\", \"type\", \"labels\"]\`\n\n**Default Fields** (if \`fields\` parameter is not provided):\n${GET_WORKSPACES_DEFAULT_FIELDS.join(', ')}`,
   {
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
-    ids: z.array(z.string()).optional()
+    ids: z.array(z.string()).optional().describe("Optional. Filter results to include only workspaces with these specific IDs."),
+    fields: z.array(z.string()).optional().describe('Optional. Specify which fields to include in the response (e.g., [\"id\", \"name\", \"taskStatuses\"]). Uses defaults (id, name) if not provided.')
   },
   async (params) => {
     try {
       const validatedParams = z.object({
-    cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
-    ids: z.array(z.string()).optional()
-  }).parse(params);
-      const endpoint = parameterizeEndpoint('/workspaces', validatedParams);
-      return callApi(endpoint, 'GET');
+        cursor: z.string().optional(),
+        ids: z.array(z.string()).optional(),
+        fields: z.array(z.string()).optional()
+      }).parse(params);
+      
+      // Exclude 'fields' from parameters sent to the API endpoint, as it's for local processing
+      const { fields, ...apiParams } = validatedParams;
+
+      const endpoint = parameterizeEndpoint('/workspaces', apiParams);
+      const apiResponseWrapper = await callApi(endpoint, 'GET');
+
+      if (apiResponseWrapper.isError) {
+        return apiResponseWrapper;
+      }
+
+      let rawWorkspacesResponse;
+      try {
+        rawWorkspacesResponse = JSON.parse(apiResponseWrapper.content[0].text);
+      } catch (e: any) {
+        console.error('Failed to parse workspaces list data:', e.message);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ error: 'API Response Error', details: `Failed to parse workspaces data: ${e.message}` })
+            }
+          ],
+          isError: true
+        };
+      }
+
+      let processedWorkspaces = [];
+      // API is expected to return an object like { workspaces: [], meta: {} }
+      if (rawWorkspacesResponse && Array.isArray(rawWorkspacesResponse.workspaces)) {
+        processedWorkspaces = selectFieldsFromData(
+          rawWorkspacesResponse.workspaces, // Pass the array of workspaces
+          fields, // User requested fields
+          GET_WORKSPACES_DEFAULT_FIELDS // Default fields
+          // No toolSpecificRules needed for get_workspaces as per PRD 2.7 for default/optional handling
+        );
+      } else if (Array.isArray(rawWorkspacesResponse)) { // Fallback if API returns array directly
+        processedWorkspaces = selectFieldsFromData(
+          rawWorkspacesResponse,
+          fields,
+          GET_WORKSPACES_DEFAULT_FIELDS
+        );
+        // If it was a direct array, wrap it for consistency with a 'workspaces' key
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ workspaces: processedWorkspaces })
+            }
+          ]
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ workspaces: processedWorkspaces, meta: rawWorkspacesResponse.meta || {} })
+          }
+        ]
+      };
+
     } catch (error) {
       if (error instanceof z.ZodError) {
         return {
@@ -1439,7 +2270,16 @@ registerTool(
           ]
         };
       }
-      throw error;
+      console.error('Unexpected error in get_workspaces:', error);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ error: 'Internal Server Error', details: 'An unexpected error occurred' })
+          }
+        ],
+        isError: true
+      };
     }
   }
 );
