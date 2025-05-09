@@ -12,6 +12,21 @@ The primary motivation behind creating this Motion MCP Server was to seamlessly 
 - Automatic rate limiting to prevent exceeding Motion API quotas (12 calls per 3 minutes).
 - Persistent state for rate limiting across server restarts, using a local SQLite database.
 
+## Smart Data Retrieval for AI Efficiency
+
+This MCP server is engineered with AI assistants in mind, particularly concerning the volume and relevance of data exchanged. Interacting with APIs can often result in verbose responses, flooding an AI's context window with information that might not be immediately useful. To address this, the server incorporates several strategies for token efficiency:
+
+*   **Sensible Defaults:** For most tools that retrieve data (like fetching tasks or projects), the server returns a curated set of default fields. These defaults are chosen to provide the most commonly useful information at a glance, ensuring you get key details without unnecessary clutter.
+
+*   **User-Controlled Specificity:** While defaults are helpful, you're always in control. If you need more (or different) information, you can instruct your AI assistant to request specific fields from the Motion API. This can range from asking for a few additional details to requesting the complete data set for a particular item. This flexibility ensures you get exactly what you need, when you need it.
+
+*   **Intelligent Handling of Complex Data:** The server employs smart processing for complex data structures, like lists of items or nested information. For instance:
+    *   When you ask for a list of task assignees, it might, by default, return just their names for brevity.
+    *   Dates are often automatically formatted into a consistent, human-readable `YYYY-MM-DD` format.
+    *   Information within nested objects (like a project manager's details) can be accessed directly (e.g., `manager.name`) or simplified by default.
+
+The overarching goal is to strike a balance: deliver rich, informative data from your Motion workspace while respecting the operational constraints of AI assistants. This makes interactions smoother, faster, and more focused on the information that truly matters for your workflow.
+
 ## About Motion Task Management
 
 Motion ([https://www.usemotion.com/](https://www.usemotion.com/)) is an AI-powered platform designed to unify and automate task management, project planning, and calendar scheduling. Key aspects relevant to this MCP server include:
@@ -159,28 +174,34 @@ This server implements automatic rate limiting for the Motion API to prevent exc
 -   Provides clear feedback with wait times when calls are blocked.
 -   Persists rate limit state across server restarts using a local SQLite database (`.data/motion_api_ratelimit.sqlite`).
 
-## For AI Assistants (Tool Users)
+## Understanding Rate Limit Errors
 
-When a Motion API call is blocked due to rate limiting, the tool you invoked will return an error response. This response will typically include:
+When you use this MCP server with an AI assistant (like Claude Desktop or Cursor), and an attempted call to the Motion API is blocked by the server's rate limiter, the AI assistant will receive a structured error message. You, as the user interacting with the AI assistant, will typically see this error relayed by the assistant in your chat interface.
 
--   An error message indicating the rate limit was reached.
--   The number of seconds you should wait before trying the call again.
-
-**Example Error Response (from tool execution):**
+**Example of a Rate Limit Error Message (as returned by a tool call):**
 
 ```json
 {
   "error": "Rate Limit Exceeded",
   "details": "Motion API rate limit reached. Please wait X seconds before trying again.",
-  "waitTimeSeconds": X
+  "waitTimeSeconds": X 
 }
 ```
 
-When you (the AI assistant) receive such an error:
+Below is an example of how this might look in an AI assistant's interface (e.g., Claude Desktop) when the rate limit is triggered. The assistant relays the server's error, including the wait time:
 
-1.  Inform the end-user about the temporary restriction and the required wait time.
-2.  Do not immediately retry the same command.
-3.  Wait for at least the specified `waitTimeSeconds` before attempting the call again or suggesting the user try again.
+![Rate Limit Error Example](./images/rate-limit-error-example.png)
+*Caption: Example of a rate limit error being displayed in an AI assistant interface after repeated tool calls to the Motion MCP server.*
+
+**How Your AI Assistant Should Respond:**
+
+Most AI assistants integrated with MCP tools are designed to understand these structured errors.
+
+1.  **Notification to You:** The AI assistant should inform you (the user) that the action couldn't be completed due to a temporary rate limit and will mention the required wait time (e.g., "I can't do that right now because the Motion API rate limit has been reached. Please try again in X seconds.").
+2.  **No Immediate Retry by AI:** The assistant itself should not immediately retry the command. It should respect the `waitTimeSeconds`.
+3.  **Guidance for You:** Based on the AI's message, you should wait for at least the specified duration before asking the AI assistant to attempt the same or another Motion-related command.
+
+This mechanism ensures that the server adheres to the Motion API's limits while providing clear feedback to you through your AI assistant, allowing for a smoother experience.
 
 ## Credits and Acknowledgements
 
