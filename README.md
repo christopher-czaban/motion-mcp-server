@@ -1,6 +1,21 @@
 # Motion MCP Server
 
-This server provides a set of MCP (Model-Context-Protocol) tools for interacting with the Motion API. It allows AI assistants to programmatically manage tasks, projects, and other Motion features.
+**An open-source MCP server enabling AI assistants to interact with the Motion API for intelligent task and project management.**
+
+## Table of Contents
+- [Motivation](#motivation)
+- [Features](#features)
+- [Smart Data Retrieval for AI Efficiency](#smart-data-retrieval-for-ai-efficiency)
+- [About Motion Task Management](#about-motion-task-management)
+- [Setup](#setup)
+- [Usage with Claude Desktop](#usage-with-claude-desktop)
+- [Other Ways to Connect AI to Motion](#other-ways-to-connect-ai-to-motion)
+- [Rate Limiting](#rate-limiting)
+- [Understanding Rate Limit Errors](#understanding-rate-limit-errors)
+- [Credits and Acknowledgements](#credits-and-acknowledgements)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Motivation
 
@@ -130,7 +145,6 @@ To use this Motion MCP server with Claude Desktop:
     ```json
     {
       "mcpServers": {
-        // ... other servers might be listed here ...
         "motion": {
           "command": "npx",
           "args": [
@@ -141,15 +155,13 @@ To use this Motion MCP server with Claude Desktop:
             "MOTION_API_KEY": "YOUR_MOTION_API_KEY_HERE" // <-- IMPORTANT: Change this key
           }
         }
-        // ... other servers might be listed here ...
       }
     }
     ```
-    If `mcpServers` doesn't exist, create it at the top level of the JSON object.
 
 3.  **Restart Claude Desktop.** After saving the configuration file, you must fully quit and restart Claude Desktop for the changes to take effect.
 
-Once configured and restarted, you should be able to invoke the Motion tools (e.g., "motion get_tasks") from Claude Desktop.
+Once configured and restarted, Claude should be able to invoke the Motion tools (e.g., "motion get_tasks").
 
 ## Other Ways to Connect AI to Motion
 
@@ -226,4 +238,12 @@ We extend our thanks to Updab for providing such a valuable resource to the deve
     - If you suspect corruption (e.g., persistent errors related to the database after confirming Node.js versions are correct), you can try deleting the `motion_api_ratelimit.sqlite` file. The server will attempt to recreate it on the next startup. *Warning: This will reset the rate limit history, potentially allowing a burst of calls if you were previously rate-limited.*
 
 -   **Path Issues in MCP Client Configuration:**
-    Double-check that the path to `main.ts` in your MCP client's configuration (e.g., `claude_desktop_config.json`) is the correct **absolute path** for your system. 
+    Double-check that the path to `main.ts` in your MCP client's configuration (e.g., `claude_desktop_config.json`) is the correct **absolute path** for your system.
+
+## Contributing
+
+Issues and feature requests are welcome! Please submit them through the GitHub issues tracker for this repository. If you'd like to contribute code, please open an issue first to discuss the proposed changes.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
