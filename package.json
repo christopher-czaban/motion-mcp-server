@@ -11,7 +11,8 @@
   "type": "module",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.0",
-    "better-sqlite3": "^11.10.0"
+    "better-sqlite3": "^11.10.0",
+    "zod-to-json-schema": "^3.24.5"
   },
   "description": "",
   "devDependencies": {
