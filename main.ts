@@ -541,48 +541,70 @@ function registerTool(name: string, description: string, parameters: any, handle
     // Zod schemas typically have a ._def property and a .parse method
     if (parameters && typeof parameters.parse === 'function' && typeof parameters._def === 'object') {
       try {
+        const jsonSchemaOptions = {
+          target: 'openApi3', // Aim for OpenAPI 3.0 compatibility
+          $refStrategy: 'none' // Inline all definitions, avoid $refs
+        } as const; // Use 'as const' for type safety with zodToJsonSchema options
+
         // Convert Zod schema to JSON schema
-        // The 'name' option for zodToJsonSchema can be useful if you have self-referencing schemas,
-        // though for simple tool parameters it might not be strictly necessary.
-        // We will also explore options to control the output further if needed.
-        const jsonSchema = zodToJsonSchema(parameters, {
-          // Try to prevent $schema from being added by the library itself, if an option exists.
-          // Based on zod-to-json-schema docs, there isn't a direct "$schemaUrl: false"
-          // but we can remove it manually.
-          // We can also specify the target OpenAPI version if Gemini prefers that.
-          // target: 'openApi3', // This could be experimented with if $schema removal isn't enough
-        });
+        let rawJsonSchema = zodToJsonSchema(parameters, jsonSchemaOptions);
         
+        // Log the raw schema from zod-to-json-schema
+        console.error(`[MCP Server main.ts] RAW JSON Schema for ${name} (target: openApi3, $refStrategy: none):`, JSON.stringify(rawJsonSchema, null, 2));
+
+        finalParametersSchema = rawJsonSchema; // Start with the potentially more compatible schema
+
         // 1. Remove $schema field - this is the most common fix for Gemini.
-        if (jsonSchema && typeof jsonSchema === 'object' && '$schema' in jsonSchema) {
-          delete jsonSchema.$schema;
+        if (finalParametersSchema && typeof finalParametersSchema === 'object' && '$schema' in finalParametersSchema) {
+          delete finalParametersSchema.$schema;
         }
 
-        // 2. Remove 'definitions' if present and if they cause issues.
-        // 'definitions' is a standard JSON Schema keyword, but complex structures
-        // might go beyond Gemini's supported subset. Let's start without this
-        // and add it if $schema removal alone is insufficient.
-        // if (jsonSchema && typeof jsonSchema === 'object' && 'definitions' in jsonSchema) {
-        //   delete jsonSchema.definitions;
-        // }
-        // If using 'definitions' and they are simple, they might be fine.
-        // Gemini's documentation on the "subset of OpenAPI Schema" is key here.
-
-        finalParametersSchema = jsonSchema;
+        // 2. Remove 'definitions' (JSON Schema) or 'components' (OpenAPI) if present and if they cause issues.
+        //    With $refStrategy: 'none', these shouldn't contain much, but good to clean up.
+        if (finalParametersSchema && typeof finalParametersSchema === 'object') {
+          if ('definitions' in finalParametersSchema) {
+            delete finalParametersSchema.definitions;
+          }
+          if ('components' in finalParametersSchema) {
+            // OpenAPI often puts schemas in components.schemas
+            // If components is empty after this, we might remove components itself.
+            if (finalParametersSchema.components && typeof finalParametersSchema.components === 'object' && 'schemas' in finalParametersSchema.components) {
+              delete finalParametersSchema.components.schemas;
+              if (Object.keys(finalParametersSchema.components).length === 0) {
+                delete finalParametersSchema.components;
+              }
+            } else if (finalParametersSchema.components && Object.keys(finalParametersSchema.components).length === 0) {
+              delete finalParametersSchema.components;
+            }
+          }
+        }
         
-        // Optional: Log the modified schema for debugging, especially during initial testing.
-        // console.error(`[MCP Server main.ts] Modified JSON Schema for ${name}:`, JSON.stringify(finalParametersSchema, null, 2));
+        // Log the modified schema for debugging
+        console.error(`[MCP Server main.ts] Modified FINAL JSON Schema for ${name}:`, JSON.stringify(finalParametersSchema, null, 2));
 
       } catch (conversionError) {
         console.error(`[MCP Server main.ts] Error converting Zod schema to JSON schema for tool ${name}:`, conversionError);
-        // If conversion fails, we fall back to the original Zod schema.
-        // This might still cause issues with Gemini but won't break other models.
         finalParametersSchema = parameters; 
       }
-    } else if (parameters && typeof parameters === 'object' && '$schema' in parameters) {
+    } else if (parameters && typeof parameters === 'object') {
       // If 'parameters' was already a plain JSON schema object (less likely with current setup)
-      delete parameters.$schema;
+      if ('$schema' in parameters) delete parameters.$schema;
+      if ('definitions' in parameters) delete parameters.definitions;
+      if ('components' in parameters) {
+          if (parameters.components && typeof parameters.components === 'object' && 'schemas' in parameters.components) {
+            delete parameters.components.schemas;
+            if (Object.keys(parameters.components).length === 0) {
+              delete parameters.components;
+            }
+          } else if (parameters.components && Object.keys(parameters.components).length === 0) {
+            delete parameters.components;
+          }
+      }
       finalParametersSchema = parameters;
+      console.error(`[MCP Server main.ts] Passed through (already object) and cleaned schema for ${name}:`, JSON.stringify(finalParametersSchema, null, 2));
+    } else {
+      // If parameters is empty or not an object (e.g., for get_servers)
+      console.error(`[MCP Server main.ts] No parameters schema to modify for ${name}. Parameters type: ${typeof parameters}`);
     }
 
     server.tool(name, description, finalParametersSchema, handler);
