@@ -66,14 +66,18 @@ Follow these steps to set up and run the Motion MCP Server:
     This project uses `better-sqlite3`, a native Node.js module. Native modules are compiled against a specific Node.js Application Binary Interface (ABI) version, identified by `NODE_MODULE_VERSION`.
     - **Problem:** If you install dependencies (`npm install`) with one Node.js version (e.g., v21.x, `NODE_MODULE_VERSION 120`) and then try to run the server with an MCP client that uses a different, ABI-incompatible Node.js version (e.g., Claude Desktop often uses Node.js v18.x, `NODE_MODULE_VERSION 108`), you will encounter an `ERR_DLOPEN_FAILED` error. The error message will typically state that the module "was compiled against a different Node.js version".
     - **Solution:**
-        - **Identify the Node.js version used by your MCP client.** For example, Claude Desktop logs usually show the Node.js version it's using (e.g., "Node.js v18.19.0").
+        - **Identify the Node.js version used by your MCP client.** For example, Claude Desktop logs usually show the Node.js version it's using (e.g., "Node.js v18.19.0"). For **Cursor**, Node.js v21.1.0 has been found to work correctly with this MCP server (as of May 2024).
         - **Use a Node.js version manager** (like `nvm` or `nvs`) to install and switch to that *same Node.js version* in your local terminal *before* proceeding to the next step.
           ```bash
           # Example using nvm if Claude Desktop uses Node v18.19.0
           nvm install 18.19.0
           nvm use 18.19.0
+          
+          # Example using nvm if Cursor is the target client (and v21.1.0 is desired)
+          nvm install 21.1.0
+          nvm use 21.1.0
           ```
-        - If you don't know the client's Node.js version, Node.js LTS versions (e.g., v18.x, v20.x) are generally good choices for broader compatibility.
+        - If you don't know the client's Node.js version, Node.js LTS versions (e.g., v18.x, v20.x) are generally good choices for broader compatibility. However, for this specific server and client combination, targeting the known compatible version is best.
 
 3.  **Install dependencies:**
     Once your terminal is using the correct Node.js version, install the dependencies:

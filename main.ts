@@ -18,6 +18,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import './database.js'; // Ensures database is initialized on startup
 import rateLimiter from './rate_limiter.js'; 
+import { zodToJsonSchema } from 'zod-to-json-schema';
 
 // Prune old records on server startup
 try {
@@ -534,8 +535,60 @@ async function callApi(endpoint: string, method: string, body?: any, contentType
 
 function registerTool(name: string, description: string, parameters: any, handler: (params: any) => Promise<any>) {
   try {
-    server.tool(name, description, parameters, handler);
+    let finalParametersSchema = parameters; // Default to original Zod schema
+
+    // Check if 'parameters' is indeed a Zod schema object
+    // Zod schemas typically have a ._def property and a .parse method
+    if (parameters && typeof parameters.parse === 'function' && typeof parameters._def === 'object') {
+      try {
+        // Convert Zod schema to JSON schema
+        // The 'name' option for zodToJsonSchema can be useful if you have self-referencing schemas,
+        // though for simple tool parameters it might not be strictly necessary.
+        // We will also explore options to control the output further if needed.
+        const jsonSchema = zodToJsonSchema(parameters, {
+          // Try to prevent $schema from being added by the library itself, if an option exists.
+          // Based on zod-to-json-schema docs, there isn't a direct "$schemaUrl: false"
+          // but we can remove it manually.
+          // We can also specify the target OpenAPI version if Gemini prefers that.
+          // target: 'openApi3', // This could be experimented with if $schema removal isn't enough
+        });
+        
+        // 1. Remove $schema field - this is the most common fix for Gemini.
+        if (jsonSchema && typeof jsonSchema === 'object' && '$schema' in jsonSchema) {
+          delete jsonSchema.$schema;
+        }
+
+        // 2. Remove 'definitions' if present and if they cause issues.
+        // 'definitions' is a standard JSON Schema keyword, but complex structures
+        // might go beyond Gemini's supported subset. Let's start without this
+        // and add it if $schema removal alone is insufficient.
+        // if (jsonSchema && typeof jsonSchema === 'object' && 'definitions' in jsonSchema) {
+        //   delete jsonSchema.definitions;
+        // }
+        // If using 'definitions' and they are simple, they might be fine.
+        // Gemini's documentation on the "subset of OpenAPI Schema" is key here.
+
+        finalParametersSchema = jsonSchema;
+        
+        // Optional: Log the modified schema for debugging, especially during initial testing.
+        // console.error(`[MCP Server main.ts] Modified JSON Schema for ${name}:`, JSON.stringify(finalParametersSchema, null, 2));
+
+      } catch (conversionError) {
+        console.error(`[MCP Server main.ts] Error converting Zod schema to JSON schema for tool ${name}:`, conversionError);
+        // If conversion fails, we fall back to the original Zod schema.
+        // This might still cause issues with Gemini but won't break other models.
+        finalParametersSchema = parameters; 
+      }
+    } else if (parameters && typeof parameters === 'object' && '$schema' in parameters) {
+      // If 'parameters' was already a plain JSON schema object (less likely with current setup)
+      delete parameters.$schema;
+      finalParametersSchema = parameters;
+    }
+
+    server.tool(name, description, finalParametersSchema, handler);
+
   } catch (error) {
+    // Keep existing error logging for tool registration failures
     console.error(`Failed to register tool ${name}:`, error);
   }
 }
