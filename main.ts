@@ -635,9 +635,9 @@ registerTool(
 registerTool(
   'set_base_url',
   'Set the base URL for API requests',
-  {
+  z.object({ // MODIFIED: Wrapped with z.object()
     url: z.string().describe('The new base URL')
-  },
+  }),
   async (params) => {
     const validatedParams = z.object({ url: z.string() }).parse(params);
     baseUrl = validatedParams.url;
@@ -658,13 +658,13 @@ When posting a comment, the content will be treated as [GitHub Flavored Markdown
  */
 registerTool(
   'post_comments',
-  '## Comment Content Input\n\nWhen posting a comment, the content will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).\n',
-  {
+  '## Comment Content Input\\n\\nWhen posting a comment, the content will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).\\n',
+  z.object({ // MODIFIED: Wrapped with z.object()
     body: z.object({
       taskId: z.string(),
       content: z.string()
     })
-  },
+  }),
   async (params) => {
     try {
       const validatedParams = z.object({
@@ -1394,18 +1394,18 @@ registerTool(
 registerTool(
   'patch_tasks_by_taskId',
   `Updates an existing task identified by its unique ID. You can modify various attributes of the task such as its name, due date, assignee, status, and more. This tool supports partial updates, meaning only the fields you provide in the request body will be changed.\\n\\n**Request Parameters:**\\n\\n*   \\\`taskId\\\` (string, required): The unique identifier of the task you want to update.\\n*   \\\`fields\\\` (array of strings, optional): Specify which fields of the updated task object should be included in the response. If omitted, a default set of fields (identical to those returned by the \\\`get_tasks_by_taskId\\\` tool) will be provided.\\n*   \\\`body\\\` (object, required): An object containing the task attributes you wish to update. Provide only the fields you want to change:\\n    *   \\\`name\\\` (string, optional): The new name or title for the task.\\n    *   \\\`dueDate\\\` (string, optional): The task's new due date. Accepts YYYY-MM-DD format or a full ISO 8601 timestamp. This can be crucial for auto-scheduling.\\n    *   \\\`assigneeId\\\` (string or null, optional): The ID of the user to assign the task to. To unassign the task, provide \\\`null\\\`.\\n    *   \\\`duration\\\` (number or string, optional): The task's duration. This can be an integer representing minutes (e.g., 30 for 30 minutes), or specific string values like \"NONE\" (for no duration) or \"REMINDER\" (for a reminder task).\\n    *   \\\`status\\\` (string, optional): The new status name for the task (e.g., \"In Progress\", \"Completed\"). Ensure the status exists in the workspace.\\n    *   \\\`autoScheduled\\\` (object or null, optional): An object to configure auto-scheduling for the task, or \\\`null\\\` to disable auto-scheduling.\\n        *   If an object is provided, it can contain:\\n            *   \\\`startDate\\\` (string, optional): The date when auto-scheduling should begin (YYYY-MM-DD or ISO 8601).\\n            *   \\\`deadlineType\\\` (string, optional): The type of deadline for auto-scheduling (e.g., \"SOFT\", \"HARD\").\\n            *   \\\`schedule\\\` (string, optional): The name or ID of a specific schedule to use.\\n        *   Note: The task's target status must have auto-scheduling enabled in Motion for these settings to take effect.\\n    *   \\\`projectId\\\` (string, optional): The ID of the project to associate this task with.\\n    *   \\\`description\\\` (string, optional): The updated task description, which can include GitHub Flavored Markdown.\\n    *   \\\`priority\\\` (string, optional): The task's priority level. Valid values are \"ASAP\", \"HIGH\", \"MEDIUM\", \"LOW\".\\n    *   \\\`labels\\\` (array of strings, optional): An array of label names to set on the task. This will replace any existing labels on the task.\\n\\n**Response Structure:**\\n\\nUpon successful execution, this tool returns the **complete updated task object**. The specific fields included in this object depend on the optional \\\`fields\\\` parameter you provide in the request:\\n*   If you use the \\\`fields\\\` parameter, only the fields you specify will be returned.\\n*   If the \\\`fields\\\` parameter is omitted or empty, a default set of task fields will be returned.\\n\\n**The \"Available Response Fields\" for the updated task object, their data types, and how to access nested information (e.g., \\\`status.name\\\`, \\\`project.name\\\`, simplified \\\`creator.name\\\`, or array contents like \\\`assignees\\\`) are identical to those provided by the \\\`get_tasks_by_taskId\\\` tool.** Please refer to the documentation for \\\`get_tasks_by_taskId\\\` for a comprehensive list and detailed explanations of all possible response fields.\\n\\nIf the update operation fails (e.g., due to a validation error on the input, an issue with the Motion API, or if the task ID is not found), the tool will return an object in the format: \\\`{ \"status\": \"FAILURE\", \"id\": \"TASK_ID_OR_NULL\" }\\\`. The \\\`id\\\` will be the \\\`taskId\\\` you provided if the failure occurred after identifying the task, or \\\`null\\\` if the failure was more general.\\n\\n**Examples:**\\n\\n1.  **Update task name and priority:**\\n    \\\`\\\`\\\`json\\n    {\\n      \"taskId\": \"task_123abc\",\\n      \"body\": {\\n        \"name\": \"Finalize Q3 Report Document\",\\n        \"priority\": \"HIGH\"\\n      }\\n    }\\n    \\\`\\\`\\\`\\n\\n2.  **Change due date, assign to a user, and request specific fields in response:**\\n    \\\`\\\`\\\`json\\n    {\\n      \"taskId\": \"task_456def\",\\n      \"fields\": [\"id\", \"name\", \"dueDate\", \"assignees\"],\\n      \"body\": {\\n        \"dueDate\": \"2024-09-15\",\\n        \"assigneeId\": \"user_789xyz\"\\n      }\\n    }\\n    \\\`\\\`\\\`\\n\\n3.  **Disable auto-scheduling for a task:**\\n    \\\`\\\`\\\`json\\n    {\\n      \"taskId\": \"task_789ghi\",\\n      \"body\": {\\n        \"autoScheduled\": null\\n      }\\n    }\\n    \\\`\\\`\\\`\\n\\n4.  **Update description and add labels:**\\n    \\\`\\\`\\\`json\\n    {\\n      \"taskId\": \"task_101jkl\",\\n      \"body\": {\\n        \"description\": \"Remember to attach the appendix.\\\\n- Item 1\\\\n- Item 2\",\\n        \"labels\": [\"urgent\", \"review-needed\"]\\n      }\\n    }\\n    \\\`\\\`\\\`\\nThe response is the updated task object, formatted based on the \\\`fields\\\` parameter or defaults (similar to get_tasks_by_taskId).\\`,
-  {
+  z.object({ // MODIFIED: Wrapped with z.object()
     taskId: z.string(),
     fields: z.array(z.string()).optional().describe('Optional. Specify which fields to include in the response. Uses defaults if not provided.'),
     body: z.object({
       name: z.string().optional().describe("The new title of the task."),
       dueDate: z.string().optional().describe("ISO 8601 string for the task\'s due date. Can be required for certain auto-scheduling configurations."),
       assigneeId: z.string().nullable().optional().describe("The ID of the user to assign the task to. Set to null to unassign."),
-      duration: z.union([z.string(), z.number()]).optional().describe("Task duration: an integer in minutes (e.g., 30), or specific strings like \'NONE\' or \'REMINDER\'."),
+      duration: z.union([z.string(), z.number()]).optional().describe("Task duration: an integer in minutes (e.g., 30), or specific strings like \\'NONE\\' or \\'REMINDER\\'."),
       status: z.string().optional().describe("The new status for the task. If not provided, defaults to the workspace default or remains unchanged."),
       autoScheduled: z.object({
         startDate: z.string().optional().describe("The date when auto-scheduling should begin (ISO 8601 string)."),
-        deadlineType: z.string().optional().describe("The type of deadline for auto-scheduling (e.g., \'SOFT\', \'HARD\'."),
+        deadlineType: z.string().optional().describe("The type of deadline for auto-scheduling (e.g., \\'SOFT\\', \\'HARD\\'."),
         schedule: z.string().optional().describe("The name or ID of the specific schedule to use for auto-scheduling.")
       }).nullable().optional().describe("Object to configure auto-scheduling, or null to disable. Task\'s status must have auto-scheduling enabled."),
       projectId: z.string().optional().describe("The ID of the project to associate the task with."),
@@ -1413,7 +1413,7 @@ registerTool(
       priority: z.string().optional().describe('Set the task\'s priority. Valid values: "ASAP", "HIGH", "MEDIUM", "LOW".'),
       labels: z.array(z.string()).optional().describe("An array of label names to set on the task. This will typically replace existing labels.")
     })
-  },
+  }),
   async (params) => {
     const originalTaskId = params.taskId; // Store for error reporting
     try {
@@ -1424,11 +1424,11 @@ registerTool(
           name: z.string().optional().describe("The new title of the task."),
           dueDate: z.string().optional().describe("ISO 8601 string for the task\'s due date. Can be required for certain auto-scheduling configurations."),
           assigneeId: z.string().nullable().optional().describe("The ID of the user to assign the task to. Set to null to unassign."),
-          duration: z.union([z.string(), z.number()]).optional().describe("Task duration: an integer in minutes (e.g., 30), or specific strings like \'NONE\' or \'REMINDER\'."),
+          duration: z.union([z.string(), z.number()]).optional().describe("Task duration: an integer in minutes (e.g., 30), or specific strings like \\'NONE\\' or \\'REMINDER\\'."),
           status: z.string().optional().describe("The new status for the task. If not provided, defaults to the workspace default or remains unchanged."),
           autoScheduled: z.object({
             startDate: z.string().optional().describe("The date when auto-scheduling should begin (ISO 8601 string)."),
-            deadlineType: z.string().optional().describe("The type of deadline for auto-scheduling (e.g., \'SOFT\', \'HARD\'."),
+            deadlineType: z.string().optional().describe("The type of deadline for auto-scheduling (e.g., \\'SOFT\\', \\'HARD\\'."),
             schedule: z.string().optional().describe("The name or ID of the specific schedule to use for auto-scheduling.")
           }).nullable().optional().describe("Object to configure auto-scheduling, or null to disable. Task\'s status must have auto-scheduling enabled."),
           projectId: z.string().optional().describe("The ID of the project to associate the task with."),
@@ -1624,7 +1624,7 @@ When passing in a task description, the input will be treated as [GitHub Flavore
 
 registerTool(
   'post_tasks',
-  '## Description Input\n\nWhen passing in a task description, the input will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).\n',
+  '## Description Input\\n\\nWhen passing in a task description, the input will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).\\n',
   {
     body: z.object({
       dueDate: z.string().optional(),
@@ -1803,12 +1803,12 @@ registerTool(
 
 registerTool(
   'get_tasks',
-  '<!-- theme: warning -->\n\n> ### Note\n>\n> By default, all tasks that are completed are left out unless\n> specifically filtered for via the status.\n',
+  '<!-- theme: warning -->\\n\\n> ### Note\\n>\\n> By default, all tasks that are completed are left out unless\\n> specifically filtered for via the status.\\n',
   {
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
     label: z.string().optional().describe('Limit tasks returned by label on the task'),
-    status: z.array(z.string()).optional().describe('Limit tasks returned by statuses that exist on tasks, cannot specify this (\'status\')\nAND includeAllStatuses in the same request'),
-    includeAllStatuses: z.boolean().optional().describe('Limit tasks returned by statuses that exist on tasks, cannot specify this (\'includeAllStatuses\')\nAND status in the same request'),
+    status: z.array(z.string()).optional().describe('Limit tasks returned by statuses that exist on tasks, cannot specify this (\'status\')\\nAND includeAllStatuses in the same request'),
+    includeAllStatuses: z.boolean().optional().describe('Limit tasks returned by statuses that exist on tasks, cannot specify this (\'includeAllStatuses\')\\nAND status in the same request'),
     workspaceId: z.string().optional().describe('The id of the workspace you want tasks from. If not provided, will return tasks from all workspaces the user is a member of.'),
     projectId: z.string().optional().describe('Limit tasks returned to a given project'),
     name: z.string().optional().describe('Limit tasks returned to those that contain this string. Case in-sensitive'),
@@ -1819,8 +1819,8 @@ registerTool(
       const validatedParams = z.object({
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
     label: z.string().optional().describe('Limit tasks returned by label on the task'),
-    status: z.array(z.string()).optional().describe('Limit tasks returned by statuses that exist on tasks, cannot specify this (\'status\')\nAND includeAllStatuses in the same request'),
-    includeAllStatuses: z.boolean().optional().describe('Limit tasks returned by statuses that exist on tasks, cannot specify this (\'includeAllStatuses\')\nAND status in the same request'),
+    status: z.array(z.string()).optional().describe('Limit tasks returned by statuses that exist on tasks, cannot specify this (\'status\')\\nAND includeAllStatuses in the same request'),
+    includeAllStatuses: z.boolean().optional().describe('Limit tasks returned by statuses that exist on tasks, cannot specify this (\'includeAllStatuses\')\\nAND status in the same request'),
     workspaceId: z.string().optional().describe('The id of the workspace you want tasks from. If not provided, will return tasks from all workspaces the user is a member of.'),
     projectId: z.string().optional().describe('Limit tasks returned to a given project'),
     name: z.string().optional().describe('Limit tasks returned to those that contain this string. Case in-sensitive'),
@@ -2007,7 +2007,7 @@ ${GET_TASKS_DEFAULT_FIELDS.join(', ')}`,
  */
 registerTool(
   'delete_tasks_assignee',
-  '<!-- theme: warning -->\n\n> ### Note\n>\n> For simplicity, use this endpoint to unassign a task\n> instead of the generic update task endpoint.\n> This also prevents bugs and accidental unassignments.\n',
+  '<!-- theme: warning -->\\n\\n> ### Note\\n>\\n> For simplicity, use this endpoint to unassign a task\\n> instead of the generic update task endpoint.\\n> This also prevents bugs and accidental unassignments.\\n',
   {
     taskId: z.string()
   },
@@ -2044,7 +2044,7 @@ the tasks project, status, and label(s) and assignee will all be reset
  */
 registerTool(
   'patch_tasks_move',
-  '### Notes\n\nWhen moving tasks from one workspace to another,\nthe tasks project, status, and label(s) and assignee will all be reset\n',
+  '### Notes\\n\\nWhen moving tasks from one workspace to another,\\nthe tasks project, status, and label(s) and assignee will all be reset\\n',
   {
     taskId: z.string(),
     body: z.object({
