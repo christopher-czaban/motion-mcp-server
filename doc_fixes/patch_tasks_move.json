@@ -1,0 +1,21 @@
+{
+  "tool": "patch_tasks_move",
+  "violations": [
+    {
+      "line": 1,
+      "message": "Missing **Overview:** heading"
+    },
+    {
+      "line": 4,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 7,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 10,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    }
+  ]
+}

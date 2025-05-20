@@ -1,0 +1,21 @@
+{
+  "tool": "get_statuses",
+  "violations": [
+    {
+      "line": 1,
+      "message": "Missing **Overview:** heading"
+    },
+    {
+      "line": 3,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 4,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 5,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    }
+  ]
+}

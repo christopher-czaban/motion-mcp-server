@@ -1,0 +1,9 @@
+{
+  "tool": "delete_tasks_assignee",
+  "violations": [
+    {
+      "line": 1,
+      "message": "Missing **Overview:** heading"
+    }
+  ]
+}

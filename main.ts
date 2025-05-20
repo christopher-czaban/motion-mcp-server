@@ -1629,11 +1629,15 @@ ${GET_TASK_BY_ID_DEFAULT_FIELDS.join(', ')}`,
           ]
         };
       }
+      let errorMessage = 'An unexpected error occurred';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ error: 'Internal tool error', details: error.message })
+            text: JSON.stringify({ error: 'Internal tool error', details: errorMessage })
           }
         ]
       };

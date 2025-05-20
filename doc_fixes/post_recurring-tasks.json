@@ -1,0 +1,297 @@
+{
+  "tool": "post_recurring-tasks",
+  "violations": [
+    {
+      "line": 1,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 5,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 7,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 9,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 26,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 33,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 40,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 49,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 51,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 64,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 76,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 94,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 100,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 102,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 109,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 116,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 1,
+      "message": "Missing **Overview:** heading"
+    },
+    {
+      "line": 16,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 17,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 18,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 19,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 20,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 21,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 22,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 28,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 29,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 30,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 31,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 35,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 36,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 37,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 38,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 42,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 43,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 44,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 45,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 46,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 47,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 55,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 56,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 57,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 58,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 59,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 70,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 71,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 72,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 80,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 81,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 82,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 83,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 84,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 88,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 89,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 90,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 91,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 92,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 96,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 97,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 98,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 104,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 105,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 106,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 107,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 111,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 112,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 113,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 114,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 118,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 119,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 120,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 121,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 122,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 123,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    }
+  ]
+}

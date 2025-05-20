@@ -1,0 +1,9 @@
+{
+  "tool": "get_users_me",
+  "violations": [
+    {
+      "line": 1,
+      "message": "Missing **Overview:** heading"
+    }
+  ]
+}

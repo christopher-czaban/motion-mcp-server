@@ -1,0 +1,21 @@
+{
+  "tool": "post_tasks",
+  "violations": [
+    {
+      "line": 3,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 1,
+      "message": "Missing **Overview:** heading"
+    },
+    {
+      "line": 7,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    },
+    {
+      "line": 8,
+      "message": "Top-level bullet must use \"*\", not \"-\""
+    }
+  ]
+}

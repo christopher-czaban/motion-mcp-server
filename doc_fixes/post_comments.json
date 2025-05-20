@@ -1,0 +1,13 @@
+{
+  "tool": "post_comments",
+  "violations": [
+    {
+      "line": 1,
+      "message": "Use **Heading:**, not # heading"
+    },
+    {
+      "line": 1,
+      "message": "Missing **Overview:** heading"
+    }
+  ]
+}
