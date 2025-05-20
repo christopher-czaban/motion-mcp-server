@@ -569,7 +569,12 @@ registerTool(
 
 registerTool(
   'set_base_url',
-  `Set the base URL for API requests`,
+  `Set the base URL for API requests
+
+**Request Parameters:**
+
+**Required Parameters:**
+* \`url\` (string, required): The new base URL`,
   { // MODIFIED: Was z.object()
     url: z.string().describe('The new base URL')
   },
@@ -596,7 +601,12 @@ registerTool(
   `**Comment Content Input:**
 
 When posting a comment, the content will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).
-`,
+
+**Request Parameters:**
+
+**Required Body Parameters:**
+* \`taskId\` (string, required): The ID of the task on which to place the comment.
+* \`content\` (string, required): The content of the comment, in GitHub Flavored Markdown.`,
   { // MODIFIED: Was z.object()
     body: z.object({
       taskId: z.string().describe('The ID of the task on which to place the comment.'),
@@ -632,7 +642,15 @@ When posting a comment, the content will be treated as [GitHub Flavored Markdown
 /* List Comments */
 registerTool(
   'get_comments',
-  `**Overview:** Lists all comments for a specific task. Returns a paginated list of comment objects, each including its \`content\` (HTML), \`creation timestamp\`, and \`creator information\` (ID, name, email). Supports pagination via a \`cursor\`.`,
+  `**Overview:** Lists all comments for a specific task. Returns a paginated list of comment objects, each including its \`content\` (HTML), \`creation timestamp\`, and \`creator information\` (ID, name, email). Supports pagination via a \`cursor\`.
+
+**Request Parameters:**
+
+**Required Parameters:**
+* \`taskId\` (string, required): The ID of the task from which to retrieve comments.
+
+**Optional Parameters:**
+* \`cursor\` (string, optional): Use if a previous request returned a cursor. Will page through results.`,
   { // MODIFIED: Was z.object()
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
     taskId: z.string().describe('The ID of the task from which to retrieve comments.')
@@ -666,6 +684,14 @@ registerTool(
   'get_projects_by_projectId',
   `**Overview:** Retrieves detailed information for a single project, specified by its ID.
 Use the \`fields\` parameter to select the exact information you need.
+
+**Request Parameters:**
+
+**Required Parameters:**
+* \`projectId\` (string, required): The ID of the project to retrieve.
+
+**Optional Parameters:**
+* \`fields\` (array of string, optional): Optional. Specify which fields to include in the response. Uses defaults if not provided.
 
 **Available Response Fields:**
 
@@ -759,6 +785,15 @@ registerTool(
   `**Overview:** Lists projects for a specified workspace.
 You can customize the information returned for each project using the \`fields\` parameter.
 Supports pagination using the \`cursor\` parameter.
+
+**Request Parameters:**
+
+**Required Parameters:**
+* \`workspaceId\` (string, required): The ID of the workspace to list projects from.
+
+**Optional Parameters:**
+* \`cursor\` (string, optional): Use if a previous request returned a cursor. Will page through results.
+* \`fields\` (array of string, optional): Optional. Specify which fields to include in the response. Uses defaults if not provided.
 
 **Available Response Fields:**
 
@@ -869,15 +904,16 @@ registerTool(
   `**Overview:** Creates a new project in Motion. Ensure you provide the required \`name\` and \`workspaceId\`. Optional fields include \`dueDate\`, \`description\`, \`labels\`, and \`priority\`. Refer to Motion API documentation for details on \`projectDefinitionId\` and template-based project creation if needed, as those are not fully detailed here to keep this concise.
 
 **Request Parameters:**
+
 **Required Body Parameters:**
-- \`name\` (string): The name of the project.
-- \`workspaceId\` (string): The workspace ID for the project.
+* \`name\` (string, required): The name of the project.
+* \`workspaceId\` (string, required): The workspace to which the project belongs.
 
 **Optional Body Parameters:**
-- \`dueDate\` (string, ISO 8601 date, e.g., \`"2024-03-12T10:52:55.714-06:00"\`): Project due date.
-- \`description\` (string): Project description. HTML input is accepted.
-- \`labels\` (array of string): List of label names for the project.
-- \`priority\` (string): Options: \`"ASAP"\`, \`"HIGH"\`, \`"MEDIUM"\` (default), \`"LOW"\`.
+* \`dueDate\` (string, optional): Optional. Project due date (e.g., \`"2024-03-12T10:52:55.714-06:00"\`).
+* \`description\` (string, optional): Optional. Project description. HTML input is accepted.
+* \`labels\` (array of string, optional): Optional. List of label names for the project.
+* \`priority\` (string, optional): Optional. Priority of the project. (Valid values: \`"ASAP"\`, \`"HIGH"\`, \`"MEDIUM"\` (default), \`"LOW"\`).
 
 **Response Format:**
 Response on success: \`{ status: "SUCCESS", id: "<NEW_PROJECT_ID>" }\`.
@@ -977,127 +1013,144 @@ registerTool(
   'post_recurring-tasks',
   `**Description Input:**
 
-When passing in a task description, the input will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax)
+When passing in a task description, the input will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).
 
-# Defining Frequencies
+**Request Parameters:**
 
-## Defining specific days for a frequency
+**Required Body Parameters:**
+* \`frequency\` (string, required): The recurrence rule for the task. Refer to the main tool description for detailed format examples like \`'daily_every_day'\` or \`'weekly_specific_days_[MO,WE,FR]'\`.
+* \`name\` (string, required): The name or title for the recurring task.
+* \`workspaceId\` (string, required): The ID of the workspace where the recurring task will be created.
+* \`priority\` (string, required): The priority for the recurring task. (Valid values: \`"ASAP"\`, \`"HIGH"\`, \`"MEDIUM"\`, \`"LOW"\`).
+* \`assigneeId\` (string, required): The ID of the user to whom the recurring tasks will be assigned.
 
-### Note
+**Optional Body Parameters:**
+* \`deadlineType\` (string, optional): Optional. The type of deadline for the recurring task (e.g., \`"SOFT"\`, \`"HARD"\`).
+* \`duration\` (string, optional): Optional. The duration of each instance of the recurring task. Send numbers as strings (e.g., \`"30"\` for 30 minutes), or use specific keywords like \`"NONE"\` or \`"REMINDER"\`.
+* \`startingOn\` (string, optional): Optional. The date when the recurring task should first start, in \`YYYY-MM-DD\` format.
+* \`idealTime\` (string, optional): Optional. The ideal time of day for the task to be scheduled, if applicable (e.g., \`'09:00'\`).
+* \`schedule\` (string, optional): Optional. The name or ID of a specific schedule to use for these recurring tasks.
+* \`description\` (string, optional): Optional. A description for the recurring task, in GitHub Flavored Markdown.
+
+**Defining Frequencies:**
+
+**Defining specific days for a frequency:**
+
+**Note:**
 
 Defining days should always be used along with a specific frequency type as defined below.
 A array of days should never be used on its own. See examples below.
 
 When picking a set of specific week days, we expect it to be defined as an array with a subset of the following values.
 
-- MO - Monday
-- TU - Tuesday
-- WE - Wednesday
-- TH - Thursday
-- FR - Friday
-- SA - Saturday
-- SU - Sunday
+* \`MO\` - Monday
+* \`TU\` - Tuesday
+* \`WE\` - Wednesday
+* \`TH\` - Thursday
+* \`FR\` - Friday
+* \`SA\` - Saturday
+* \`SU\` - Sunday
 
 Example - \`[MO, FR, SU]\` would mean Monday, Friday and Sunday.
 
-## Defining a daily frequency
+**Defining a daily frequency:**
 
-- \`daily_every_day\`
-- \`daily_every_week_day\`
-- \`daily_specific_days_\$DAYS_ARRAY\$\`
-- Ex: \`daily_specific_days_\[MO, TU, FR\]\`
+* \`daily_every_day\`
+* \`daily_every_week_day\`
+* \`daily_specific_days_\$DAYS_ARRAY\$\`
+  - Ex: \`daily_specific_days_[MO, TU, FR]\`
 
-## Defining a weekly frequency
+**Defining a weekly frequency:**
 
-- \`weekly_any_day\`
-- \`weekly_any_week_day\`
-- \`weekly_specific_days_\$DAYS_ARRAY\$\`
-- Ex: \`weekly_specific_days_[MO, TU, FR]\`
+* \`weekly_any_day\`
+* \`weekly_any_week_day\`
+* \`weekly_specific_days_\$DAYS_ARRAY\$\`
+  - Ex: \`weekly_specific_days_[MO, TU, FR]\`
 
-## Defining a bi-weekly frequency
+**Defining a bi-weekly frequency:**
 
-- \`biweekly_first_week_specific_days_\$DAYS_ARRAY\$\`
-- Ex: \`biweekly_first_week_specific_days_[MO, TU, FR]\`
-- \`biweekly_first_week_any_day\`
-- \`biweekly_first_week_any_week_day\`
-- \`biweekly_second_week_any_day\`
-- \`biweekly_second_week_any_week_day\`
+* \`biweekly_first_week_specific_days_\$DAYS_ARRAY\$\`
+  - Ex: \`biweekly_first_week_specific_days_[MO, TU, FR]\`
+* \`biweekly_first_week_any_day\`
+* \`biweekly_first_week_any_week_day\`
+* \`biweekly_second_week_any_day\`
+* \`biweekly_second_week_any_week_day\`
 
-## Defining a monthly frequency
+**Defining a monthly frequency:**
 
-### Specific Week Day Options
+**Specific Week Day Options:**
 
-When choosing the 1st, 2nd, 3rd, 4th or last day of the week for the month, it takes the form of any of the following where $DAY$ can be substituted for the day code mentioned above.
+When choosing the 1st, 2nd, 3rd, 4th or last day of the week for the month, it takes the form of any of the following where \`$DAY$\` can be substituted for the day code mentioned above.
 
-- \`monthly_first_\$DAY\$\`
-- \`monthly_second_\$DAY\$\`
-- \`monthly_third_\$DAY\$\`
-- \`monthly_fourth_\$DAY\$\`
-- \`monthly_last_\$DAY\$\`
+* \`monthly_first_\$DAY\$\`
+* \`monthly_second_\$DAY\$\`
+* \`monthly_third_\$DAY\$\`
+* \`monthly_fourth_\$DAY\$\`
+* \`monthly_last_\$DAY\$\`
 
 **Example**
 \`monthly_first_MO\`
 
-### Specific Day Options
+**Specific Day Options:**
 
 When choosing a specific day of the month, for example the 6th, it would be defined with just the number like below.
 
 Examples:
 
-- \`monthly_1\`
-- \`monthly_15\`
-- \`monthly_31\`
+* \`monthly_1\`
+* \`monthly_15\`
+* \`monthly_31\`
 
 In the case you choose a numeric value for a month that does not have that many days, we will default to the last day of the month.
 
-### Specific Week Options
+**Specific Week Options:**
 
 **Any Day**
 
-- \`monthly_any_day_first_week\`
-- \`monthly_any_day_second_week\`
-- \`monthly_any_day_third_week\`
-- \`monthly_any_day_fourth_week\`
-- \`monthly_any_day_last_week\`
+* \`monthly_any_day_first_week\`
+* \`monthly_any_day_second_week\`
+* \`monthly_any_day_third_week\`
+* \`monthly_any_day_fourth_week\`
+* \`monthly_any_day_last_week\`
 
 **Any Week Day**
 
-- \`monthly_any_week_day_first_week\`
-- \`monthly_any_week_day_second_week\`
-- \`monthly_any_week_day_third_week\`
-- \`monthly_any_week_day_fourth_week\`
-- \`monthly_any_week_day_last_week\`
+* \`monthly_any_week_day_first_week\`
+* \`monthly_any_week_day_second_week\`
+* \`monthly_any_week_day_third_week\`
+* \`monthly_any_week_day_fourth_week\`
+* \`monthly_any_week_day_last_week\`
 
-### Other Options
+**Other Options:**
 
-- \`monthly_last_day_of_month\`
-- \`monthly_any_week_day_of_month\`
-- \`monthly_any_day_of_month\`
+* \`monthly_last_day_of_month\`
+* \`monthly_any_week_day_of_month\`
+* \`monthly_any_day_of_month\`
 
-## Defining a quarterly frequency
+**Defining a quarterly frequency:**
 
-### First Days
+**First Days:**
 
-- \`quarterly_first_day\`
-- \`quarterly_first_week_day\`
-- \`quarterly_first_\$DAY\$\`
-- Ex. \`quarterly_first_MO\`
+* \`quarterly_first_day\`
+* \`quarterly_first_week_day\`
+* \`quarterly_first_\$DAY\$\`
+  - Ex. \`quarterly_first_MO\`
 
-### Last Days
+**Last Days:**
 
-- \`quarterly_last_day\`
-- \`quarterly_last_week_day\`
-- \`quarterly_last_\$DAY\$\`
-- Ex. \`quarterly_last_MO\`
+* \`quarterly_last_day\`
+* \`quarterly_last_week_day\`
+* \`quarterly_last_\$DAY\$\`
+  - Ex. \`quarterly_last_MO\`
 
-### Other Options
+**Other Options:**
 
-- \`quarterly_any_day_first_week\`
-- \`quarterly_any_day_second_week\`
-- \`quarterly_any_day_last_week\`
-- \`quarterly_any_day_first_month\`
-- \`quarterly_any_day_second_month\`
-- \`quarterly_any_day_third_month\``,
+* \`quarterly_any_day_first_week\`
+* \`quarterly_any_day_second_week\`
+* \`quarterly_any_day_last_week\`
+* \`quarterly_any_day_first_month\`
+* \`quarterly_any_day_second_month\`
+* \`quarterly_any_day_third_month\``,
   { // MODIFIED: Was z.object()
     body: z.object({
       frequency: z.string().describe("The recurrence rule for the task. Refer to the main tool description for detailed format examples like 'daily_every_day' or 'weekly_specific_days_[MO,WE,FR]'."),
@@ -1172,7 +1225,15 @@ In the case you choose a numeric value for a month that does not have that many 
 /* List Recurring Tasks */
 registerTool(
   'get_recurring-tasks',
-  `**Overview:** Lists all recurring task configurations for a specified workspace. Returns a paginated list. Each recurring task object can include details like its \`name\`, \`creator\`, \`assignee\`, associated \`project\`, \`status\`, \`priority\`, \`labels\`, and full \`workspace information\`. Use the \`cursor\` for pagination if many recurring tasks exist.`,
+  `**Overview:** Lists all recurring task configurations for a specified workspace. Returns a paginated list. Each recurring task object can include details like its \`name\`, \`creator\`, \`assignee\`, associated \`project\`, \`status\`, \`priority\`, \`labels\`, and full \`workspace information\`. Use the \`cursor\` for pagination if many recurring tasks exist.
+
+**Request Parameters:**
+
+**Required Parameters:**
+* \`workspaceId\` (string, required): The id of the workspace you want tasks from.
+
+**Optional Parameters:**
+* \`cursor\` (string, optional): Use if a previous request returned a cursor. Will page through results.`,
   { // MODIFIED: Was z.object()
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
     workspaceId: z.string().describe('The id of the workspace you want tasks from.')
@@ -1204,7 +1265,12 @@ registerTool(
 /* Delete a Recurring Task */
 registerTool(
   'delete_recurring-tasks_by_taskId',
-  `Permanently deletes a recurring task configuration based on its \`ID\`.`,
+  `**Overview:** Permanently deletes a recurring task configuration based on its \`ID\`.
+
+**Request Parameters:**
+
+**Required Parameters:**
+* \`taskId\` (string, required): The ID of the recurring task configuration to delete.`,
   { // MODIFIED: Was z.object()
     taskId: z.string().describe('The ID of the recurring task configuration to delete.')
   },
@@ -1261,11 +1327,17 @@ registerTool(
 registerTool(
   'get_statuses',
   `**Overview:** Lists all available task statuses for a given workspace.
+
+**Request Parameters:**
+
+**Required Parameters:**
+* \`workspaceId\` (string, required): The ID of the workspace for which to retrieve statuses.
+
 **Fixed Fields:** This tool always returns an array of status objects, and each object contains the following fixed fields:
-- \`name\`: The name of the status (e.g., "Todo", "In Progress").
-- \`isDefaultStatus\`: A boolean indicating if this is the default status for new tasks in the workspace.
-- \`isResolvedStatus\`: A boolean indicating if tasks with this status are considered resolved/completed.
-**Notes:** This tool does *not* support the \`fields\` parameter.`,
+* \`name\`: The name of the status (e.g., \`"Todo"\`, \`"In Progress"\`).
+* \`isDefaultStatus\`: A boolean indicating if this is the default status for new tasks in the workspace.
+* \`isResolvedStatus\`: A boolean indicating if tasks with this status are considered resolved/completed.
+**Notes:** This tool does not support the \`fields\` parameter.`,
   { // MODIFIED: Was z.object()
     workspaceId: z.string().describe('The ID of the workspace for which to retrieve statuses.')
   },
@@ -1343,34 +1415,40 @@ registerTool(
 
 **Request Parameters:**
 
-*   \`taskId\` (string, required): The unique identifier of the task you want to update.
-*   \`fields\` (array of strings, optional): Specify which fields of the updated task object should be included in the response. If omitted, a default set of fields (identical to those returned by the \`get_tasks_by_taskId\` tool) will be provided.
-*   \`body\` (object, required): An object containing the task attributes you wish to update. Provide only the fields you want to change:
-    *   \`name\` (string, optional): The new name or title for the task.
-    *   \`dueDate\` (string, optional): The task's new due date. Accepts YYYY-MM-DD format or a full ISO 8601 timestamp. This can be crucial for auto-scheduling.
-    *   \`assigneeId\` (string or null, optional): The ID of the user to assign the task to. To unassign the task, provide \`null\`.
-    *   \`duration\` (string, optional): The task's duration. Provide an integer as a string (e.g., "30" for 30 minutes), or a specific string values, either "NONE" or "REMINDER".
-    *   \`status\` (string, optional): The new status name for the task (e.g., "In Progress", "Completed"). Ensure the status exists in the workspace.
-    *   \`autoScheduled\` (object or null, optional): An object to configure auto-scheduling for the task, or \`null\` to disable auto-scheduling.
-        *   If an object is provided, it can contain:
-            *   \`startDate\` (string, optional): The date when auto-scheduling should begin (YYYY-MM-DD or ISO 8601).
-            *   \`deadlineType\` (string, optional): The type of deadline for auto-scheduling (e.g., "SOFT", "HARD").
-            *   \`schedule\` (string, optional): The name or ID of a specific schedule to use.
-        *   Note: The task's target status must have auto-scheduling enabled in Motion for these settings to take effect.
-    *   \`projectId\` (string, optional): The ID of the project to associate this task with.
-    *   \`description\` (string, optional): The updated task description, which can include GitHub Flavored Markdown.
-    *   \`priority\` (string, optional): The task's priority level. Valid values are "ASAP", "HIGH", "MEDIUM", "LOW".
-    *   \`labels\` (array of strings, optional): An array of label names to set on the task. This will replace any existing labels on the task.
+**Path Parameter:**
+* \`taskId\` (string, required): The unique identifier of the task to update.
+
+**Optional Parameters:**
+* \`fields\` (array of strings, optional): Specify which fields of the updated task object should be included in the response. If omitted, a default set of fields (identical to those returned by the \`get_tasks_by_taskId\` tool) will be provided.
+
+**Required Body Parameters:** (At least one of the following optional body parameters must be provided for the request to be meaningful)
+
+**Optional Body Parameters:**
+* \`name\` (string, optional): The new name or title for the task.
+* \`dueDate\` (string, optional): The task\'s new due date. Accepts \`YYYY-MM-DD\` format or a full ISO 8601 timestamp. This can be crucial for auto-scheduling.
+* \`assigneeId\` (string or \`null\`, optional): The ID of the user to assign the task to. To unassign the task, provide \`null\`.
+* \`duration\` (string, optional): The task\'s duration. Provide an integer as a string (e.g., \`"30"\` for 30 minutes), or a specific string values, either \`"NONE"\` or \`"REMINDER"\`.
+* \`status\` (string, optional): The new status name for the task (e.g., \`"In Progress"\`, \`"Completed"\`). Ensure the status exists in the workspace.
+* \`autoScheduled\` (object or \`null\`, optional): An object to configure auto-scheduling for the task, or \`null\` to disable auto-scheduling.
+  - If an object is provided, it can contain:
+    * \`startDate\` (string, optional): The date when auto-scheduling should begin (\`YYYY-MM-DD\` or ISO 8601).
+    * \`deadlineType\` (string, optional): The type of deadline for auto-scheduling (e.g., \`"SOFT"\`, \`"HARD"\`).
+    * \`schedule\` (string, optional): The name or ID of a specific schedule to use.
+  - Note: The task\'s target status must have auto-scheduling enabled in Motion for these settings to take effect.
+* \`projectId\` (string, optional): The ID of the project to associate this task with.
+* \`description\` (string, optional): The updated task description, which can include GitHub Flavored Markdown.
+* \`priority\` (string, optional): The task\'s priority level. (Valid values: \`"ASAP"\`, \`"HIGH"\`, \`"MEDIUM"\`, \`"LOW"\`).
+* \`labels\` (array of strings, optional): An array of label names to set on the task. This will replace any existing labels on the task.
 
 **Response Structure:**
 
-Upon successful execution, this tool returns the **complete updated task object**. The specific fields included in this object depend on the optional \`fields\` parameter you provide in the request:
-*   If you use the \`fields\` parameter, only the fields you specify will be returned.
-*   If the \`fields\` parameter is omitted or empty, a default set of task fields will be returned.
+Upon successful execution, this tool returns the complete updated task object. The specific fields included in this object depend on the optional \`fields\` parameter you provide in the request:
+* If you use the \`fields\` parameter, only the fields you specify will be returned.
+* If the \`fields\` parameter is omitted or empty, a default set of task fields will be returned.
 
 **Notes:** The "Available Response Fields" for the updated task object, their data types, and how to access nested information (e.g., \`status.name\`, \`project.name\`, simplified \`creator.name\`, or array contents like \`assignees\`) are identical to those provided by the \`get_tasks_by_taskId\` tool. Please refer to the documentation for \`get_tasks_by_taskId\` for a comprehensive list and detailed explanations of all possible response fields.
 
-The response is the updated task object, formatted based on the \`fields\` parameter or defaults (similar to get_tasks_by_taskId).`,
+The response is the updated task object, formatted based on the \`fields\` parameter or defaults (similar to \`get_tasks_by_taskId\`).`,
   {
     taskId: z.string().describe('The unique identifier of the task to retrieve.'),
     fields: z.array(z.string()).optional().describe('Optional. Specify which fields to include in the response. Uses defaults if not provided.'),
@@ -1649,7 +1727,12 @@ ${GET_TASK_BY_ID_DEFAULT_FIELDS.join(', ')}`,
 /* Delete a Task */
 registerTool(
   'delete_tasks_by_taskId',
-  `Permanently deletes a task based on its \`ID\`.`,
+  `**Overview:** Permanently deletes a task based on its \`ID\`.
+
+**Request Parameters:**
+
+**Required Parameters:**
+* \`taskId\` (string, required): The ID of the task to delete.`,
   { // MODIFIED: Was z.object()
     taskId: z.string().describe('The ID of the task to delete.')
   },
@@ -1684,9 +1767,25 @@ registerTool(
 When passing in a task description, the input will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).
 
 **Request Parameters:**
-**Request Body Parameters:**
-- **Required:** \`name\` (string), \`workspaceId\` (string)
-- **Optional:** \`description\` (string), \`dueDate\` (string, \`YYYY-MM-DD\` or ISO 8601), \`duration\` (send numbers as strings like \`"30"\` for minutes, or keywords like \`"NONE"\` / \`"REMINDER"\`), \`status\` (string, status name), \`priority\` (string: \`"ASAP"\`, \`"HIGH"\`, \`"MEDIUM"\`, \`"LOW"\`), \`assigneeId\` (string, user ID), \`projectId\` (string), \`labels\` (array of strings), \`autoScheduled\` (object or \`null\`).
+
+**Required Body Parameters:**
+* \`name\` (string, required): The name/title of the task.
+* \`workspaceId\` (string, required): The ID of the workspace where the task will be created.
+
+**Optional Body Parameters:**
+* \`description\` (string, optional): Optional. Task description in GitHub Flavored Markdown.
+* \`dueDate\` (string, optional): Optional. Task due date in \`YYYY-MM-DD\` or ISO 8601 format.
+* \`duration\` (string, optional): Optional. Task duration. Send numbers as strings (e.g., \`"30"\` for 30 minutes), or specific keywords like \`"NONE"\` or \`"REMINDER"\`.
+* \`status\` (string, optional): Optional. Name of the status to assign the task.
+* \`priority\` (string, optional): Optional. Task priority. (Valid values: \`'ASAP'\`, \`'HIGH'\`, \`'MEDIUM'\`, \`'LOW'\`. Defaults to \`MEDIUM\` if unspecified).
+* \`assigneeId\` (string, optional): Optional. ID of the user to assign the task to.
+* \`projectId\` (string, optional): Optional. ID of the project to associate the task with.
+* \`labels\` (array of strings, optional): Optional. Array of label names to assign to the task.
+* \`autoScheduled\` (object or \`null\`, optional): Optional. Object to configure auto-scheduling, or \`null\` to disable. Task\'s target status must allow auto-scheduling.
+  - If an object is provided, it can contain:
+    * \`startDate\` (string, optional): Date auto-scheduling should begin (\`YYYY-MM-DD\` or ISO 8601 format).
+    * \`deadlineType\` (string, optional): Type of deadline (e.g., \`'SOFT'\`, \`'HARD'\`).
+    * \`schedule\` (string, optional): Name or ID of the schedule to use.
 
 **Response Format:**
 On success, returns \`{ "status": "SUCCESS", "id": "<NEW_TASK_ID>" }\`.
@@ -1976,7 +2075,12 @@ ${GET_TASKS_DEFAULT_FIELDS.join(', ')}`,
  */
 registerTool(
   'delete_tasks_assignee',
-  `**Overview:** For simplicity, use this endpoint to unassign a task instead of the generic update task endpoint. This also prevents bugs and accidental unassignments.`,
+  `**Overview:** For simplicity, use this endpoint to unassign a task instead of the generic update task endpoint. This also prevents bugs and accidental unassignments.
+
+**Request Parameters:**
+
+**Required Parameters:**
+* \`taskId\` (string, required): The ID of the task from which the assignee will be removed.`,
   {
     taskId: z.string().describe('The ID of the task from which the assignee will be removed.')
   },
@@ -2009,14 +2113,15 @@ registerTool(
   `**Overview:** Moves a task to a different workspace. 
 
 **Request Parameters:**
+
 **Path Parameter:**
-- \`taskId\` (string, required): The ID of the task to move.
+* \`taskId\` (string, required): The ID of the task to move.
 
 **Required Body Parameters:**
-- \`workspaceId\` (string): The ID of the target workspace.
+* \`workspaceId\` (string, required): The ID of the workspace to which you want the task moved.
 
 **Optional Body Parameters:**
-- \`assigneeId\` (string): The user ID to assign the task to in the new workspace.
+* \`assigneeId\` (string, optional): The user ID the task should be assigned to in the new workspace.
 
 **Important Notes:**
 When moving tasks, the task\'s project, status, labels, and potentially other associations from the original workspace will be reset or unlinked according to Motion API behavior.`,
@@ -2066,15 +2171,22 @@ registerTool(
   'get_users',
   `**Overview:** Lists users, optionally filtered by workspace or team. Supports pagination via \`cursor\`.
 
+**Request Parameters:**
+
+**Optional Parameters:**
+* \`cursor\` (string, optional): Use if a previous request returned a cursor. Will page through results.
+* \`workspaceId\` (string, optional): Optional. Filter users belonging to a specific workspace ID.
+* \`teamId\` (string, optional): Optional. Filter users belonging to a specific team ID.
+
 The response is an object containing a \`users\` array and potentially a \`meta\` object for pagination.
 
-**Fixed Fields:** Each user object in the array *always* contains the following fixed fields:
-- \`id\`: The user\'s unique identifier.
-- \`name\`: The user\'s name.
-- \`email\`: The user\'s email address.
+**Fixed Fields:** Each user object in the array always contains the following fixed fields:
+* \`id\`: The user\\'s unique identifier.
+* \`name\`: The user\\'s name.
+* \`email\`: The user\\'s email address.
 
 **Notes:** If more results are available, the \`meta.cursor\` field will contain a string to pass to the \`cursor\` parameter for the next page.
-This tool does *not* support the \`fields\` parameter.`,
+This tool does not support the \`fields\` parameter.`,
   {
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
     workspaceId: z.string().optional().describe("Optional. Filter users belonging to a specific workspace ID."),
@@ -2176,9 +2288,9 @@ registerTool(
   'get_users_me',
   `**Overview:** Retrieves the profile information for the currently authenticated user (associated with the API key).
 **Fixed Fields:** This tool always returns an object containing the following fixed fields:
-- \`id\`: The user\'s unique identifier.
-- \`name\`: The user\'s name.
-- \`email\`: The user\'s email address.
+* \`id\`: The user\\'s unique identifier.
+* \`name\`: The user\\'s name.
+* \`email\`: The user\\'s email address.
 **Notes:** This tool does *not* support the \`fields\` parameter.`,
   {},
   async (params) => {
@@ -2254,23 +2366,29 @@ registerTool(
   'get_workspaces',
   `**Overview:** Lists workspaces the current user has access to. Supports filtering by specific \`ids\`, pagination via \`cursor\`, and response customization via \`fields\`.
 
+**Request Parameters:**
+
+**Optional Parameters:**
+* \`cursor\` (string, optional): Use if a previous request returned a cursor. Will page through results.
+* \`ids\` (array of string, optional): Optional. Filter results to include only workspaces with these specific IDs.
+* \`fields\` (array of string, optional): Optional. Specify which fields to include in the response (e.g., \`["id", "name", "taskStatuses"]\`). Uses defaults (\`id\`, \`name\`) if not provided.
 
 **Available Response Fields:**
 
-1.  **Simple Fields:** \`id\`, \`name\`, \`type\` (e.g., "INDIVIDUAL"), \`teamId\` (ID string or null).
-2.  **Array Fields:**
-    *   \`labels\`: An array of label strings defined for the workspace.
-    *   \`taskStatuses\`: An array of status objects available in the workspace. Each object includes fields like \`name\`, \`isDefaultStatus\`, \`isResolvedStatus\`.
+1. **Simple Fields:** \`id\`, \`name\`, \`type\` (e.g., \`"INDIVIDUAL"\`), \`teamId\` (ID string or \`null\`).
+2. **Array Fields:**
+    * \`labels\`: An array of label strings defined for the workspace.
+    * \`taskStatuses\`: An array of status objects available in the workspace. Each object includes fields like \`name\`, \`isDefaultStatus\`, \`isResolvedStatus\`.
 
 **Meta Object (for pagination):**
-*   \`meta.cursor\`: If present, use this value in the \`cursor\` parameter of a subsequent call to fetch the next page of workspaces.
+* \`meta.cursor\`: If present, use this value in the \`cursor\` parameter of a subsequent call to fetch the next page of workspaces.
 
 **Examples:**
-- To get default info (id, name) for all workspaces: call without \`fields\`.
-- To get defaults plus task statuses: \`fields: ["id", "name", "taskStatuses"]\`
-- To get workspace type and labels: \`fields: ["id", "name", "type", "labels"]\`
+* To get default info (\`id\`, \`name\`) for all workspaces: call without \`fields\`.
+* To get defaults plus task statuses: \`fields: ["id", "name", "taskStatuses"]\`
+* To get workspace type and labels: \`fields: ["id", "name", "type", "labels"]\`
 
-**Default Fields** (if \`fields\` parameter is not provided):
+**Default Fields:** (when \`fields\` is omitted):
 ${GET_WORKSPACES_DEFAULT_FIELDS.join(', ')}`,
   {
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
