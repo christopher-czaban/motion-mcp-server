@@ -593,7 +593,7 @@ When posting a comment, the content will be treated as [GitHub Flavored Markdown
  */
 registerTool(
   'post_comments',
-  `## Comment Content Input
+  `**Comment Content Input:**
 
 When posting a comment, the content will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).
 `,
@@ -632,7 +632,7 @@ When posting a comment, the content will be treated as [GitHub Flavored Markdown
 /* List Comments */
 registerTool(
   'get_comments',
-  `Lists all comments for a specific task. Returns a paginated list of comment objects, each including its \`content\` (HTML), \`creation timestamp\`, and \`creator information\` (ID, name, email). Supports pagination via a \`cursor\`.`,
+  `**Overview:** Lists all comments for a specific task. Returns a paginated list of comment objects, each including its \`content\` (HTML), \`creation timestamp\`, and \`creator information\` (ID, name, email). Supports pagination via a \`cursor\`.`,
   { // MODIFIED: Was z.object()
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
     taskId: z.string().describe('The ID of the task from which to retrieve comments.')
@@ -664,7 +664,7 @@ registerTool(
 /* Retrieve Project */
 registerTool(
   'get_projects_by_projectId',
-  `Retrieves detailed information for a single project, specified by its ID.
+  `**Overview:** Retrieves detailed information for a single project, specified by its ID.
 Use the \`fields\` parameter to select the exact information you need.
 
 **Available Response Fields:**
@@ -676,13 +676,13 @@ Use the \`fields\` parameter to select the exact information you need.
     *   \`completedTime\` (Note:YYYY-MM-DD format, or null if not completed)
 
 2.  **Nested Object Fields** (use dot notation):
-    *   \`manager.name\` (Note: To get the manager\'s name, include "manager" in your \`fields\` request, e.g., \`fields: ["manager"]\`. The response will then contain \`manager.name\` with the name, or null if no manager is assigned.)
+    *   \`manager.name\` (Note: To get the manager\\'s name, include "manager" in your \`fields\` request, e.g., \`fields: ["manager"]\`. The response will then contain \`manager.name\` with the name, or null if no manager is assigned.)
 
 **Examples:**
 - For core project details: \`fields: ["id", "name", "description", "dueDate"]\`
-- To include the manager\'s name: \`fields: ["id", "name", "manager"]\`
+- To include the manager\\'s name: \`fields: ["id", "name", "manager"]\`
 
-**Default Fields** (if \`fields\` parameter is not provided):
+**Default Fields:** (when \`fields\` is omitted):
 ${GET_PROJECT_BY_ID_DEFAULT_FIELDS.join(', ')}`,
   { // MODIFIED: Was z.object()
     projectId: z.string().describe('The ID of the project to retrieve.'),
@@ -756,7 +756,7 @@ ${GET_PROJECT_BY_ID_DEFAULT_FIELDS.join(', ')}`,
 /* List Projects */
 registerTool(
   'get_projects',
-  `Lists projects for a specified workspace.
+  `**Overview:** Lists projects for a specified workspace.
 You can customize the information returned for each project using the \`fields\` parameter.
 Supports pagination using the \`cursor\` parameter.
 
@@ -770,18 +770,18 @@ Supports pagination using the \`cursor\` parameter.
     *   \`workspaceId\`
 
 2.  **Nested Object Fields** (use dot notation):
-    *   \`status.name\` (e.g., "In Progress" - this is the project\'s overall status)
-    *   \`manager.name\` (Note: To get the manager\'s name, include "manager" in your \`fields\` request, e.g., \`fields: ["manager"]\`. The response will then contain \`manager.name\` with the name, or null if no manager is assigned.)
+    *   \`status.name\` (e.g., "In Progress" - this is the project\\'s overall status)
+    *   \`manager.name\` (Note: To get the manager\\'s name, include "manager" in your \`fields\` request, e.g., \`fields: ["manager"]\`. The response will then contain \`manager.name\` with the name, or null if no manager is assigned.)
 
 3.  **Meta Object** (for pagination):
     *   \`meta.cursor\` (Note: If more projects are available, this field will contain a cursor string. Pass this string to the \`cursor\` parameter in your next call to fetch the subsequent set of projects.)
 
 **Examples:**
 - For a basic list view: \`fields: ["id", "name", "status.name"]\`
-- To include manager\'s name and due date: \`fields: ["id", "name", "dueDate", "manager"]\`
+- To include manager\\'s name and due date: \`fields: ["id", "name", "dueDate", "manager"]\`
 - For description and task count: \`fields: ["id", "name", "description", "taskCount"]\`
 
-**Default Fields** (if \`fields\` parameter is not provided):
+**Default Fields:** (when \`fields\` is omitted):
 ${GET_PROJECTS_DEFAULT_FIELDS.join(', ')}`,
   { // MODIFIED: Was z.object()
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
@@ -866,8 +866,9 @@ ${GET_PROJECTS_DEFAULT_FIELDS.join(', ')}`,
 /* Create Project */
 registerTool(
   'post_projects',
-  `Creates a new project in Motion. Ensure you provide the required \`name\` and \`workspaceId\`. Optional fields include \`dueDate\`, \`description\`, \`labels\`, and \`priority\`. Refer to Motion API documentation for details on \`projectDefinitionId\` and template-based project creation if needed, as those are not fully detailed here to keep this concise.
+  `**Overview:** Creates a new project in Motion. Ensure you provide the required \`name\` and \`workspaceId\`. Optional fields include \`dueDate\`, \`description\`, \`labels\`, and \`priority\`. Refer to Motion API documentation for details on \`projectDefinitionId\` and template-based project creation if needed, as those are not fully detailed here to keep this concise.
 
+**Request Parameters:**
 **Required Body Parameters:**
 - \`name\` (string): The name of the project.
 - \`workspaceId\` (string): The workspace ID for the project.
@@ -878,6 +879,7 @@ registerTool(
 - \`labels\` (array of string): List of label names for the project.
 - \`priority\` (string): Options: "ASAP", "HIGH", "MEDIUM" (default), "LOW".
 
+**Response Format:**
 Response on success: \`{ status: "SUCCESS", id: "<NEW_PROJECT_ID>" }\`.
 Response on failure: \`{ status: "FAILURE", id: null }\`.`,
   {
@@ -973,7 +975,7 @@ Response on failure: \`{ status: "FAILURE", id: null }\`.`,
 /* ## Description Input */
 registerTool(
   'post_recurring-tasks',
-  `## Description Input
+  `**Description Input:**
 
 When passing in a task description, the input will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax)
 
@@ -1170,7 +1172,7 @@ In the case you choose a numeric value for a month that does not have that many 
 /* List Recurring Tasks */
 registerTool(
   'get_recurring-tasks',
-  `Lists all recurring task configurations for a specified workspace. Returns a paginated list. Each recurring task object can include details like its \`name\`, \`creator\`, \`assignee\`, associated \`project\`, \`status\`, \`priority\`, \`labels\`, and full \`workspace information\`. Use the \`cursor\` for pagination if many recurring tasks exist.`,
+  `**Overview:** Lists all recurring task configurations for a specified workspace. Returns a paginated list. Each recurring task object can include details like its \`name\`, \`creator\`, \`assignee\`, associated \`project\`, \`status\`, \`priority\`, \`labels\`, and full \`workspace information\`. Use the \`cursor\` for pagination if many recurring tasks exist.`,
   { // MODIFIED: Was z.object()
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
     workspaceId: z.string().describe('The id of the workspace you want tasks from.')
@@ -1258,13 +1260,12 @@ registerTool(
 /* List statuses for a workspace */
 registerTool(
   'get_statuses',
-  `Lists all available task statuses for a given workspace.
-This tool always returns an array of status objects, and each object contains the following fixed fields:
+  `**Overview:** Lists all available task statuses for a given workspace.
+**Fixed Fields:** This tool always returns an array of status objects, and each object contains the following fixed fields:
 - \`name\`: The name of the status (e.g., "Todo", "In Progress").
 - \`isDefaultStatus\`: A boolean indicating if this is the default status for new tasks in the workspace.
 - \`isResolvedStatus\`: A boolean indicating if tasks with this status are considered resolved/completed.
-
-This tool does *not* support the \`fields\` parameter.`,
+**Notes:** This tool does *not* support the \`fields\` parameter.`,
   { // MODIFIED: Was z.object()
     workspaceId: z.string().describe('The ID of the workspace for which to retrieve statuses.')
   },
@@ -1338,7 +1339,7 @@ This tool does *not* support the \`fields\` parameter.`,
 /* Update a Task */
 registerTool(
   'patch_tasks_by_taskId',
-  `Updates an existing task identified by its unique ID. You can modify various attributes of the task such as its name, due date, assignee, status, and more. This tool supports partial updates, meaning only the fields you provide in the request body will be changed.
+  `**Overview:** Updates an existing task identified by its unique ID. You can modify various attributes of the task such as its name, due date, assignee, status, and more. This tool supports partial updates, meaning only the fields you provide in the request body will be changed.
 
 **Request Parameters:**
 
@@ -1367,7 +1368,7 @@ Upon successful execution, this tool returns the **complete updated task object*
 *   If you use the \`fields\` parameter, only the fields you specify will be returned.
 *   If the \`fields\` parameter is omitted or empty, a default set of task fields will be returned.
 
-**The "Available Response Fields" for the updated task object, their data types, and how to access nested information (e.g., \`status.name\`, \`project.name\`, simplified \`creator.name\`, or array contents like \`assignees\`) are identical to those provided by the \`get_tasks_by_taskId\` tool.** Please refer to the documentation for \`get_tasks_by_taskId\` for a comprehensive list and detailed explanations of all possible response fields.
+**Notes:** The "Available Response Fields" for the updated task object, their data types, and how to access nested information (e.g., \`status.name\`, \`project.name\`, simplified \`creator.name\`, or array contents like \`assignees\`) are identical to those provided by the \`get_tasks_by_taskId\` tool. Please refer to the documentation for \`get_tasks_by_taskId\` for a comprehensive list and detailed explanations of all possible response fields.
 
 The response is the updated task object, formatted based on the \`fields\` parameter or defaults (similar to get_tasks_by_taskId).`,
   {
@@ -1513,7 +1514,7 @@ The response is the updated task object, formatted based on the \`fields\` param
 /* Retrieve a Task */
 registerTool(
   'get_tasks_by_taskId',
-  `Retrieves detailed information for a single task, specified by its ID.
+  `**Overview:** Retrieves detailed information for a single task, specified by its ID.
 Use the \`fields\` parameter to select the exact information you need.
 
 **Available Response Fields:**
@@ -1543,7 +1544,7 @@ Use the \`fields\` parameter to select the exact information you need.
 - To include creator name and assignee names: \`fields: ["id", "name", "creator", "assignees"]\`
 - To get specific project details: \`fields: ["id", "name", "project.id", "project.name"]\`
 
-**Default Fields** (if the \`fields\` parameter is not provided or is empty):
+**Default Fields:** (when \`fields\` is omitted):
 ${GET_TASK_BY_ID_DEFAULT_FIELDS.join(', ')}`,
   { // Plain object, NOT z.object()
     taskId: z.string().describe('The unique identifier of the task to retrieve.'),
@@ -1677,14 +1678,15 @@ registerTool(
 
 registerTool(
   'post_tasks',
-  `Creates a new task in a specified workspace.
+  `**Overview:** Creates a new task in a specified workspace.
 
-## Description Input
+**Description Input:**
 When passing in a task description, the input will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).
 
+**Request Parameters:**
 **Request Body Parameters:**
 - **Required:** \`name\` (string), \`workspaceId\` (string)
-- **Optional:** \`description\` (string), \`dueDate\` (string, YYYY-MM-DD or ISO 8601), \`duration\` (send numbers as strings like \"30\" for minutes, or keywords like \"NONE\"/\"REMINDER\"), \`status\` (string, status name), \`priority\` (string: "ASAP", "HIGH", "MEDIUM", "LOW"), \`assigneeId\` (string, user ID), \`projectId\` (string), \`labels\` (array of strings), \`autoScheduled\` (object or null).
+- **Optional:** \`description\` (string), \`dueDate\` (string, YYYY-MM-DD or ISO 8601), \`duration\` (send numbers as strings like \\"30\\" for minutes, or keywords like \\"NONE\\"\\/"REMINDER\\"), \`status\` (string, status name), \`priority\` (string: "ASAP", "HIGH", "MEDIUM", "LOW"), \`assigneeId\` (string, user ID), \`projectId\` (string), \`labels\` (array of strings), \`autoScheduled\` (object or null).
 
 **Response Format:**
 On success, returns \`{ "status": "SUCCESS", "id": "<NEW_TASK_ID>" }\`.
@@ -1817,7 +1819,7 @@ On failure, returns \`{ "status": "FAILURE", "id": null }\`.`,
 
 registerTool(
   'get_tasks',
-  `By default, all tasks that are completed are left out unless specifically filtered for via the status.
+  `**Overview:** By default, all tasks that are completed are left out unless specifically filtered for via the status.
 
 **Available Response Fields:**
 
@@ -1843,7 +1845,7 @@ registerTool(
 - For scheduling: \`fields=["id", "scheduledStart", "scheduledEnd", "duration"]\`
 - For assignee details: \`fields=["id", "name", "assignees"]\`
 
-**Default Fields** (if none specified):
+**Default Fields:** (when \`fields\` is omitted):
 ${GET_TASKS_DEFAULT_FIELDS.join(', ')}`,
   { // MODIFIED: Was z.object()
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
@@ -1974,7 +1976,7 @@ ${GET_TASKS_DEFAULT_FIELDS.join(', ')}`,
  */
 registerTool(
   'delete_tasks_assignee',
-  `For simplicity, use this endpoint to unassign a task instead of the generic update task endpoint. This also prevents bugs and accidental unassignments.`,
+  `**Overview:** For simplicity, use this endpoint to unassign a task instead of the generic update task endpoint. This also prevents bugs and accidental unassignments.`,
   {
     taskId: z.string().describe('The ID of the task from which the assignee will be removed.')
   },
@@ -2004,8 +2006,9 @@ registerTool(
 
 registerTool(
   'patch_tasks_move',
-  `Moves a task to a different workspace. 
+  `**Overview:** Moves a task to a different workspace. 
 
+**Request Parameters:**
 **Path Parameter:**
 - \`taskId\` (string, required): The ID of the task to move.
 
@@ -2061,17 +2064,16 @@ When moving tasks, the task\'s project, status, labels, and potentially other as
 /* List users */
 registerTool(
   'get_users',
-  `Lists users, optionally filtered by workspace or team. Supports pagination via \`cursor\`.
+  `**Overview:** Lists users, optionally filtered by workspace or team. Supports pagination via \`cursor\`.
 
 The response is an object containing a \`users\` array and potentially a \`meta\` object for pagination.
 
-Each user object in the array *always* contains the following fixed fields:
+**Fixed Fields:** Each user object in the array *always* contains the following fixed fields:
 - \`id\`: The user\'s unique identifier.
 - \`name\`: The user\'s name.
 - \`email\`: The user\'s email address.
 
-If more results are available, the \`meta.cursor\` field will contain a string to pass to the \`cursor\` parameter for the next page.
-
+**Notes:** If more results are available, the \`meta.cursor\` field will contain a string to pass to the \`cursor\` parameter for the next page.
 This tool does *not* support the \`fields\` parameter.`,
   {
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
@@ -2172,7 +2174,12 @@ This tool does *not* support the \`fields\` parameter.`,
 /* Get My User */
 registerTool(
   'get_users_me',
-  `Retrieves the profile information for the currently authenticated user (associated with the API key).\nThis tool always returns an object containing the following fixed fields:\n- \`id\`: The user\'s unique identifier.\n- \`name\`: The user\'s name.\n- \`email\`: The user\'s email address.\n\nThis tool does *not* support the \`fields\` parameter.`,
+  `**Overview:** Retrieves the profile information for the currently authenticated user (associated with the API key).
+**Fixed Fields:** This tool always returns an object containing the following fixed fields:
+- \`id\`: The user\'s unique identifier.
+- \`name\`: The user\'s name.
+- \`email\`: The user\'s email address.
+**Notes:** This tool does *not* support the \`fields\` parameter.`,
   {},
   async (params) => {
     try {
