@@ -535,90 +535,25 @@ async function callApi(endpoint: string, method: string, body?: any, contentType
 
 function registerTool(name: string, description: string, parameters: any, handler: (params: any) => Promise<any>) {
   try {
-    let finalParametersSchema = parameters; // Default to original Zod schema
-
-    // Check if 'parameters' is indeed a Zod schema object
-    // Zod schemas typically have a ._def property and a .parse method
-    if (parameters && typeof parameters.parse === 'function' && typeof parameters._def === 'object') {
-      try {
-        const jsonSchemaOptions = {
-          target: 'openApi3', // Aim for OpenAPI 3.0 compatibility
-          $refStrategy: 'none' // Inline all definitions, avoid $refs
-        } as const; // Use 'as const' for type safety with zodToJsonSchema options
-
-        // Convert Zod schema to JSON schema
-        let rawJsonSchema = zodToJsonSchema(parameters, jsonSchemaOptions);
-        
-        // Log the raw schema from zod-to-json-schema
-        console.error(`[MCP Server main.ts] RAW JSON Schema for ${name} (target: openApi3, $refStrategy: none):`, JSON.stringify(rawJsonSchema, null, 2));
-
-        finalParametersSchema = rawJsonSchema; // Start with the potentially more compatible schema
-
-        // 1. Remove $schema field - this is the most common fix for Gemini.
-        if (finalParametersSchema && typeof finalParametersSchema === 'object' && '$schema' in finalParametersSchema) {
-          delete finalParametersSchema.$schema;
-        }
-
-        // 2. Remove 'definitions' (JSON Schema) or 'components' (OpenAPI) if present and if they cause issues.
-        //    With $refStrategy: 'none', these shouldn't contain much, but good to clean up.
-        if (finalParametersSchema && typeof finalParametersSchema === 'object') {
-          if ('definitions' in finalParametersSchema) {
-            delete finalParametersSchema.definitions;
-          }
-          if ('components' in finalParametersSchema) {
-            // OpenAPI often puts schemas in components.schemas
-            // If components is empty after this, we might remove components itself.
-            if (finalParametersSchema.components && typeof finalParametersSchema.components === 'object' && 'schemas' in finalParametersSchema.components) {
-              delete finalParametersSchema.components.schemas;
-              if (Object.keys(finalParametersSchema.components).length === 0) {
-                delete finalParametersSchema.components;
-              }
-            } else if (finalParametersSchema.components && Object.keys(finalParametersSchema.components).length === 0) {
-              delete finalParametersSchema.components;
-            }
-          }
-        }
-        
-        // Log the modified schema for debugging
-        console.error(`[MCP Server main.ts] Modified FINAL JSON Schema for ${name}:`, JSON.stringify(finalParametersSchema, null, 2));
-
-      } catch (conversionError) {
-        console.error(`[MCP Server main.ts] Error converting Zod schema to JSON schema for tool ${name}:`, conversionError);
-        finalParametersSchema = parameters; 
-      }
-    } else if (parameters && typeof parameters === 'object') {
-      // If 'parameters' was already a plain JSON schema object (less likely with current setup)
-      if ('$schema' in parameters) delete parameters.$schema;
-      if ('definitions' in parameters) delete parameters.definitions;
-      if ('components' in parameters) {
-          if (parameters.components && typeof parameters.components === 'object' && 'schemas' in parameters.components) {
-            delete parameters.components.schemas;
-            if (Object.keys(parameters.components).length === 0) {
-              delete parameters.components;
-            }
-          } else if (parameters.components && Object.keys(parameters.components).length === 0) {
-            delete parameters.components;
-          }
-      }
-      finalParametersSchema = parameters;
-      console.error(`[MCP Server main.ts] Passed through (already object) and cleaned schema for ${name}:`, JSON.stringify(finalParametersSchema, null, 2));
-    } else {
-      // If parameters is empty or not an object (e.g., for get_servers)
-      console.error(`[MCP Server main.ts] No parameters schema to modify for ${name}. Parameters type: ${typeof parameters}`);
-    }
-
-    server.tool(name, description, finalParametersSchema, handler);
-
+    // Directly use the parameters as passed.
+    // The MCP SDK is expected to handle plain objects with Zod types,
+    // or z.object() instances if tools are defined that way.
+    console.error(`[MCP Server main.ts] Registering tool: ${name} with parameters:`, JSON.stringify(parameters, null, 2));
+    server.tool(name, description, parameters, handler);
   } catch (error) {
-    // Keep existing error logging for tool registration failures
     console.error(`Failed to register tool ${name}:`, error);
   }
 }
 
+/******************************************************************************
+ * TODO AUTOGENERATED SECTION STARTS                                          *
+ * TODO PLEASE CHECK WORKSPACEID DESCRIPTIONS AND OTHER FIELDS IN TOOL PARAMS *
+ ******************************************************************************/
+
 // Default tools
 registerTool(
   'get_servers',
-  'Get available servers from the Swagger spec',
+  `Get available servers from the Swagger spec`,
   {},
   async () => {
     return {
@@ -634,10 +569,10 @@ registerTool(
 
 registerTool(
   'set_base_url',
-  'Set the base URL for API requests',
-  z.object({ // MODIFIED: Wrapped with z.object()
+  `Set the base URL for API requests`,
+  { // MODIFIED: Was z.object()
     url: z.string().describe('The new base URL')
-  }),
+  },
   async (params) => {
     const validatedParams = z.object({ url: z.string() }).parse(params);
     baseUrl = validatedParams.url;
@@ -658,19 +593,22 @@ When posting a comment, the content will be treated as [GitHub Flavored Markdown
  */
 registerTool(
   'post_comments',
-  '## Comment Content Input\\n\\nWhen posting a comment, the content will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).\\n',
-  z.object({ // MODIFIED: Wrapped with z.object()
+  `## Comment Content Input
+
+When posting a comment, the content will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).
+`,
+  { // MODIFIED: Was z.object()
     body: z.object({
-      taskId: z.string(),
-      content: z.string()
+      taskId: z.string().describe('The ID of the task on which to place the comment.'),
+      content: z.string().describe('The content of the comment, in GitHub Flavored Markdown.')
     })
-  }),
+  },
   async (params) => {
     try {
       const validatedParams = z.object({
     body: z.object({
-      taskId: z.string(),
-      content: z.string()
+      taskId: z.string().describe('The ID of the task on which to place the comment.'),
+      content: z.string().describe('The content of the comment, in GitHub Flavored Markdown.')
     })
   }).parse(params);
       const endpoint = parameterizeEndpoint('/comments', validatedParams);
@@ -694,16 +632,16 @@ registerTool(
 /* List Comments */
 registerTool(
   'get_comments',
-  'List Comments',
-  {
+  `Lists all comments for a specific task. Returns a paginated list of comment objects, each including its \`content\` (HTML), \`creation timestamp\`, and \`creator information\` (ID, name, email). Supports pagination via a \`cursor\`.`,
+  { // MODIFIED: Was z.object()
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
-    taskId: z.string()
+    taskId: z.string().describe('The ID of the task from which to retrieve comments.')
   },
   async (params) => {
     try {
       const validatedParams = z.object({
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
-    taskId: z.string()
+    taskId: z.string().describe('The ID of the task from which to retrieve comments.')
   }).parse(params);
       const endpoint = parameterizeEndpoint('/comments', validatedParams);
       return callApi(endpoint, 'GET');
@@ -738,15 +676,15 @@ Use the \`fields\` parameter to select the exact information you need.
     *   \`completedTime\` (Note:YYYY-MM-DD format, or null if not completed)
 
 2.  **Nested Object Fields** (use dot notation):
-    *   \`manager.name\` (Note: To get the manager\'s name, include \"manager\" in your \`fields\` request, e.g., \`fields: [\"manager\"]\`. The response will then contain \`manager.name\` with the name, or null if no manager is assigned.)
+    *   \`manager.name\` (Note: To get the manager\'s name, include "manager" in your \`fields\` request, e.g., \`fields: ["manager"]\`. The response will then contain \`manager.name\` with the name, or null if no manager is assigned.)
 
 **Examples:**
-- For core project details: \`fields: [\"id\", \"name\", \"description\", \"dueDate\"]\`
-- To include the manager\'s name: \`fields: [\"id\", \"name\", \"manager\"]\`
+- For core project details: \`fields: ["id", "name", "description", "dueDate"]\`
+- To include the manager\'s name: \`fields: ["id", "name", "manager"]\`
 
 **Default Fields** (if \`fields\` parameter is not provided):
 ${GET_PROJECT_BY_ID_DEFAULT_FIELDS.join(', ')}`,
-  {
+  { // MODIFIED: Was z.object()
     projectId: z.string().describe('The ID of the project to retrieve.'),
     fields: z.array(z.string()).optional().describe('Optional. Specify which fields to include in the response. Uses defaults if not provided.')
   },
@@ -832,20 +770,20 @@ Supports pagination using the \`cursor\` parameter.
     *   \`workspaceId\`
 
 2.  **Nested Object Fields** (use dot notation):
-    *   \`status.name\` (e.g., \"In Progress\" - this is the project\'s overall status)
-    *   \`manager.name\` (Note: To get the manager\'s name, include \"manager\" in your \`fields\` request, e.g., \`fields: [\"manager\"]\`. The response will then contain \`manager.name\` with the name, or null if no manager is assigned.)
+    *   \`status.name\` (e.g., "In Progress" - this is the project\'s overall status)
+    *   \`manager.name\` (Note: To get the manager\'s name, include "manager" in your \`fields\` request, e.g., \`fields: ["manager"]\`. The response will then contain \`manager.name\` with the name, or null if no manager is assigned.)
 
 3.  **Meta Object** (for pagination):
     *   \`meta.cursor\` (Note: If more projects are available, this field will contain a cursor string. Pass this string to the \`cursor\` parameter in your next call to fetch the subsequent set of projects.)
 
 **Examples:**
-- For a basic list view: \`fields: [\"id\", \"name\", \"status.name\"]\`
-- To include manager\'s name and due date: \`fields: [\"id\", \"name\", \"dueDate\", \"manager\"]\`
-- For description and task count: \`fields: [\"id\", \"name\", \"description\", \"taskCount\"]\`
+- For a basic list view: \`fields: ["id", "name", "status.name"]\`
+- To include manager\'s name and due date: \`fields: ["id", "name", "dueDate", "manager"]\`
+- For description and task count: \`fields: ["id", "name", "description", "taskCount"]\`
 
 **Default Fields** (if \`fields\` parameter is not provided):
 ${GET_PROJECTS_DEFAULT_FIELDS.join(', ')}`,
-  {
+  { // MODIFIED: Was z.object()
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
     workspaceId: z.string().describe('The ID of the workspace to list projects from.'),
     fields: z.array(z.string()).optional().describe('Optional. Specify which fields to include in the response. Uses defaults if not provided.')
@@ -858,15 +796,13 @@ ${GET_PROJECTS_DEFAULT_FIELDS.join(', ')}`,
         fields: z.array(z.string()).optional()
       }).parse(params);
       
-      // Exclude 'fields' from parameters sent to the API endpoint
       const { fields, ...apiParams } = validatedParams;
       
       const endpoint = parameterizeEndpoint('/projects', apiParams);
       const apiResponseWrapper = await callApi(endpoint, 'GET');
 
-      // Handle potential API error from callApi
       if (apiResponseWrapper.isError) {
-        return apiResponseWrapper; // Return the error response directly
+        return apiResponseWrapper;
       }
 
       let rawProjectsData;
@@ -885,8 +821,6 @@ ${GET_PROJECTS_DEFAULT_FIELDS.join(', ')}`,
         };
       }
 
-      // PRD indicates the API returns an object like { projects: [], meta: {} }
-      // We need to pass the actual array of projects to selectFieldsFromData
       const projectsArray = rawProjectsData?.projects;
 
       if (!Array.isArray(projectsArray)) {
@@ -902,18 +836,12 @@ ${GET_PROJECTS_DEFAULT_FIELDS.join(', ')}`,
          };
       }
 
-      // Call selectFieldsFromData with the array of projects
-      // toolSpecificRules for manager simplification and date formatting will be added in Subtask 2.2
       const processedData = selectFieldsFromData(projectsArray, fields, GET_PROJECTS_DEFAULT_FIELDS, GET_PROJECTS_TOOL_SPECIFIC_RULES); 
 
-      // Re-wrap the processed data in the original structure if meta data is important
-      // For now, returning the processed array directly. This might need adjustment based on how AI consumes it.
       return {
         content: [
           {
             type: 'text',
-            // If rawProjectsData.meta exists, we might want to include it.
-            // For now, just returning the processed projects array in a top-level 'projects' key for consistency.
             text: JSON.stringify({ projects: processedData, meta: rawProjectsData.meta || {} })
           }
         ]
@@ -938,16 +866,28 @@ ${GET_PROJECTS_DEFAULT_FIELDS.join(', ')}`,
 /* Create Project */
 registerTool(
   'post_projects',
-  'Create Project',
+  `Creates a new project in Motion. Ensure you provide the required \`name\` and \`workspaceId\`. Optional fields include \`dueDate\`, \`description\`, \`labels\`, and \`priority\`. Refer to Motion API documentation for details on \`projectDefinitionId\` and template-based project creation if needed, as those are not fully detailed here to keep this concise.
+
+**Required Body Parameters:**
+- \`name\` (string): The name of the project.
+- \`workspaceId\` (string): The workspace ID for the project.
+
+**Optional Body Parameters:**
+- \`dueDate\` (string, ISO 8601 date, e.g., "2024-03-12T10:52:55.714-06:00"): Project due date.
+- \`description\` (string): Project description. HTML input is accepted.
+- \`labels\` (array of string): List of label names for the project.
+- \`priority\` (string): Options: "ASAP", "HIGH", "MEDIUM" (default), "LOW".
+
+Response on success: \`{ status: "SUCCESS", id: "<NEW_PROJECT_ID>" }\`.
+Response on failure: \`{ status: "FAILURE", id: null }\`.`,
   {
     body: z.object({
-      dueDate: z.string().optional(),
-      name: z.string(),
-      workspaceId: z.string(),
-      description: z.string().optional(),
-      labels: z.array(z.string()).optional().describe('Defaults to MEDIUM. Options are ASAP, HIGH, MEDIUM, and LOW.'),
-      status: z.string().optional(),
-      priority: z.string()
+      dueDate: z.string().optional().describe("Optional. Project due date (e.g., \"2024-03-12T10:52:55.714-06:00\")."),
+      name: z.string().describe("Required. The name of the project."),
+      workspaceId: z.string().describe("Required. The workspace to which the project belongs."),
+      description: z.string().optional().describe("Optional. Project description. HTML input is accepted."),
+      labels: z.array(z.string()).optional().describe('Optional. List of label names for the project. Existing options: ASAP, HIGH, MEDIUM, LOW - but this seems to be for priority. For labels, it is just an array of strings.'), // Adjusted based on API doc
+      priority: z.string().optional().describe('Optional. Priority of the project. Options: "ASAP", "HIGH", "MEDIUM" (default), "LOW".') 
     })
   },
   async (params) => {
@@ -958,24 +898,16 @@ registerTool(
           name: z.string(),
           workspaceId: z.string(),
           description: z.string().optional(),
-          labels: z.array(z.string()).optional(),
-          status: z.string().optional(),
-          priority: z.string()
+          labels: z.array(z.string()).optional(), 
+          priority: z.string().optional() 
         })
       }).parse(params);
       
-      // Extraktion des body-Inhalts
-      const { body } = validatedParams;
-      
-      // Leeres Objekt für Query-Parameter
       const endpoint = parameterizeEndpoint('/projects', {});
-      
-      // Senden nur des body-Inhalts an die API
-      const response = await callApi(endpoint, 'POST', body, 'application/json');
-      
-      // Prüfen, ob die Antwort einen Fehler anzeigt
-      if (response.isError) {
-        // Vereinfachte Fehlerantwort zurückgeben
+      const apiResponseWrapper = await callApi(endpoint, 'POST', validatedParams.body, 'application/json');
+
+      if (apiResponseWrapper.isError) {
+        // callApi already includes error details, but PRD wants specific format for post_tasks failure
         return {
           content: [
             {
@@ -985,21 +917,34 @@ registerTool(
           ]
         };
       }
-      
-      // ID aus der erfolgreichen Antwort extrahieren
-      // response.content[0].text enthält den JSON-String des erstellten Projekts
+
+      // Assuming successful API call returns the created task object with an id
+      let createdTaskData;
       try {
-        const projectData = JSON.parse(response.content[0].text);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ status: 'SUCCESS', id: projectData.id })
-            }
-          ]
-        };
-      } catch (error) {
-        // Bei Parsing-Fehler Misserfolg zurückgeben
+        createdTaskData = JSON.parse(apiResponseWrapper.content[0].text);
+        if (createdTaskData && createdTaskData.id) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ status: 'SUCCESS', id: createdTaskData.id })
+              }
+            ]
+          };
+        } else {
+          // If API success but no ID or unexpected format
+          console.error('post_tasks: API success but ID missing in response', createdTaskData);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ status: 'FAILURE', id: null })
+              }
+            ]
+          };
+        }
+      } catch (e) {
+        console.error('post_tasks: Failed to parse successful API response', e);
         return {
           content: [
             {
@@ -1009,20 +954,10 @@ registerTool(
           ]
         };
       }
+
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        // Auch bei Validierungsfehlern das vereinfachte Format verwenden
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ status: 'FAILURE', id: null })
-            }
-          ]
-        };
-      }
-      
-      // Für alle anderen Fehler ebenfalls vereinfachte Fehlerantwort
+      // Handles Zod validation errors and any other unexpected errors before/after API call
+      console.error('Error in post_tasks handler:', error);
       return {
         content: [
           {
@@ -1035,22 +970,21 @@ registerTool(
   }
 );
 
-/* ## Description Input
+/* ## Description Input */
+registerTool(
+  'post_recurring-tasks',
+  `## Description Input
 
-When passing in a task description, the input will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).
+When passing in a task description, the input will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax)
 
 # Defining Frequencies
 
-In order to give our API all the power that motion has to offer, we allow calls to create recurring tasks in the same way you can through the UI.
-
 ## Defining specific days for a frequency
 
-<!-- theme: warning -->
+### Note
 
-> ### Note
->
-> Defining days should always be used along with a specific frequency type as defined below.
-> A array of days should never be used on its own. See examples below.
+Defining days should always be used along with a specific frequency type as defined below.
+A array of days should never be used on its own. See examples below.
 
 When picking a set of specific week days, we expect it to be defined as an array with a subset of the following values.
 
@@ -1062,30 +996,30 @@ When picking a set of specific week days, we expect it to be defined as an array
 - SA - Saturday
 - SU - Sunday
 
-Example - `[MO, FR, SU]` would mean Monday, Friday and Sunday.
+Example - \`[MO, FR, SU]\` would mean Monday, Friday and Sunday.
 
 ## Defining a daily frequency
 
-- `daily_every_day`
-- `daily_every_week_day`
-- `daily_specific_days_$DAYS_ARRAY$`
-  - Ex: `daily_specific_days_[MO, TU, FR]`
+- \`daily_every_day\`
+- \`daily_every_week_day\`
+- \`daily_specific_days_\$DAYS_ARRAY\$\`
+- Ex: \`daily_specific_days_\[MO, TU, FR\]\`
 
 ## Defining a weekly frequency
 
-- `weekly_any_day`
-- `weekly_any_week_day`
-- `weekly_specific_days_$DAYS_ARRAY$`
-  - Ex: `weekly_specific_days_[MO, TU, FR]`
+- \`weekly_any_day\`
+- \`weekly_any_week_day\`
+- \`weekly_specific_days_\$DAYS_ARRAY\$\`
+- Ex: \`weekly_specific_days_[MO, TU, FR]\`
 
 ## Defining a bi-weekly frequency
 
-- `biweekly_first_week_specific_days_$DAYS_ARRAY$`
-  - Ex: `biweekly_first_week_specific_days_[MO, TU, FR]`
-- `biweekly_first_week_any_day`
-- `biweekly_first_week_any_week_day`
-- `biweekly_second_week_any_day`
-- `biweekly_second_week_any_week_day`
+- \`biweekly_first_week_specific_days_\$DAYS_ARRAY\$\`
+- Ex: \`biweekly_first_week_specific_days_[MO, TU, FR]\`
+- \`biweekly_first_week_any_day\`
+- \`biweekly_first_week_any_week_day\`
+- \`biweekly_second_week_any_day\`
+- \`biweekly_second_week_any_week_day\`
 
 ## Defining a monthly frequency
 
@@ -1093,14 +1027,14 @@ Example - `[MO, FR, SU]` would mean Monday, Friday and Sunday.
 
 When choosing the 1st, 2nd, 3rd, 4th or last day of the week for the month, it takes the form of any of the following where $DAY$ can be substituted for the day code mentioned above.
 
-- `monthly_first_$DAY$`
-- `monthly_second_$DAY$`
-- `monthly_third_$DAY$`
-- `monthly_fourth_$DAY$`
-- `monthly_last_$DAY$`
+- \`monthly_first_\$DAY\$\`
+- \`monthly_second_\$DAY\$\`
+- \`monthly_third_\$DAY\$\`
+- \`monthly_fourth_\$DAY\$\`
+- \`monthly_last_\$DAY\$\`
 
 **Example**
-`monthly_first_MO`
+\`monthly_first_MO\`
 
 ### Specific Day Options
 
@@ -1108,9 +1042,9 @@ When choosing a specific day of the month, for example the 6th, it would be defi
 
 Examples:
 
-- `monthly_1`
-- `monthly_15`
-- `monthly_31`
+- \`monthly_1\`
+- \`monthly_15\`
+- \`monthly_31\`
 
 In the case you choose a numeric value for a month that does not have that many days, we will default to the last day of the month.
 
@@ -1118,95 +1052,105 @@ In the case you choose a numeric value for a month that does not have that many 
 
 **Any Day**
 
-- `monthly_any_day_first_week`
-- `monthly_any_day_second_week`
-- `monthly_any_day_third_week`
-- `monthly_any_day_fourth_week`
-- `monthly_any_day_last_week`
+- \`monthly_any_day_first_week\`
+- \`monthly_any_day_second_week\`
+- \`monthly_any_day_third_week\`
+- \`monthly_any_day_fourth_week\`
+- \`monthly_any_day_last_week\`
 
 **Any Week Day**
 
-- `monthly_any_week_day_first_week`
-- `monthly_any_week_day_second_week`
-- `monthly_any_week_day_third_week`
-- `monthly_any_week_day_fourth_week`
-- `monthly_any_week_day_last_week`
+- \`monthly_any_week_day_first_week\`
+- \`monthly_any_week_day_second_week\`
+- \`monthly_any_week_day_third_week\`
+- \`monthly_any_week_day_fourth_week\`
+- \`monthly_any_week_day_last_week\`
 
 ### Other Options
 
-- `monthly_last_day_of_month`
-- `monthly_any_week_day_of_month`
-- `monthly_any_day_of_month`
+- \`monthly_last_day_of_month\`
+- \`monthly_any_week_day_of_month\`
+- \`monthly_any_day_of_month\`
 
 ## Defining a quarterly frequency
 
 ### First Days
 
-- `quarterly_first_day`
-- `quarterly_first_week_day`
-- `quarterly_first_$DAY$`
-  - Ex. `quarterly_first_MO`
+- \`quarterly_first_day\`
+- \`quarterly_first_week_day\`
+- \`quarterly_first_\$DAY\$\`
+- Ex. \`quarterly_first_MO\`
 
 ### Last Days
 
-- `quarterly_last_day`
-- `quarterly_last_week_day`
-- `quarterly_last_$DAY$`
-  - Ex. `quarterly_last_MO`
+- \`quarterly_last_day\`
+- \`quarterly_last_week_day\`
+- \`quarterly_last_\$DAY\$\`
+- Ex. \`quarterly_last_MO\`
 
 ### Other Options
 
-- `quarterly_any_day_first_week`
-- `quarterly_any_day_second_week`
-- `quarterly_any_day_last_week`
-- `quarterly_any_day_first_month`
-- `quarterly_any_day_second_month`
-- `quarterly_any_day_third_month`
- */
-registerTool(
-  'post_recurring-tasks',
-  '## Description Input\n\nWhen passing in a task description, the input will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).\n\n# Defining Frequencies\n\nIn order to give our API all the power that motion has to offer, we allow calls to create recurring tasks in the same way you can through the UI.\n\n## Defining specific days for a frequency\n\n<!-- theme: warning -->\n\n> ### Note\n>\n> Defining days should always be used along with a specific frequency type as defined below.\n> A array of days should never be used on its own. See examples below.\n\nWhen picking a set of specific week days, we expect it to be defined as an array with a subset of the following values.\n\n- MO - Monday\n- TU - Tuesday\n- WE - Wednesday\n- TH - Thursday\n- FR - Friday\n- SA - Saturday\n- SU - Sunday\n\nExample - `[MO, FR, SU]` would mean Monday, Friday and Sunday.\n\n## Defining a daily frequency\n\n- `daily_every_day`\n- `daily_every_week_day`\n- `daily_specific_days_$DAYS_ARRAY$`\n  - Ex: `daily_specific_days_[MO, TU, FR]`\n\n## Defining a weekly frequency\n\n- `weekly_any_day`\n- `weekly_any_week_day`\n- `weekly_specific_days_$DAYS_ARRAY$`\n  - Ex: `weekly_specific_days_[MO, TU, FR]`\n\n## Defining a bi-weekly frequency\n\n- `biweekly_first_week_specific_days_$DAYS_ARRAY$`\n  - Ex: `biweekly_first_week_specific_days_[MO, TU, FR]`\n- `biweekly_first_week_any_day`\n- `biweekly_first_week_any_week_day`\n- `biweekly_second_week_any_day`\n- `biweekly_second_week_any_week_day`\n\n## Defining a monthly frequency\n\n### Specific Week Day Options\n\nWhen choosing the 1st, 2nd, 3rd, 4th or last day of the week for the month, it takes the form of any of the following where $DAY$ can be substituted for the day code mentioned above.\n\n- `monthly_first_$DAY$`\n- `monthly_second_$DAY$`\n- `monthly_third_$DAY$`\n- `monthly_fourth_$DAY$`\n- `monthly_last_$DAY$`\n\n**Example**\n`monthly_first_MO`\n\n### Specific Day Options\n\nWhen choosing a specific day of the month, for example the 6th, it would be defined with just the number like below.\n\nExamples:\n\n- `monthly_1`\n- `monthly_15`\n- `monthly_31`\n\nIn the case you choose a numeric value for a month that does not have that many days, we will default to the last day of the month.\n\n### Specific Week Options\n\n**Any Day**\n\n- `monthly_any_day_first_week`\n- `monthly_any_day_second_week`\n- `monthly_any_day_third_week`\n- `monthly_any_day_fourth_week`\n- `monthly_any_day_last_week`\n\n**Any Week Day**\n\n- `monthly_any_week_day_first_week`\n- `monthly_any_week_day_second_week`\n- `monthly_any_week_day_third_week`\n- `monthly_any_week_day_fourth_week`\n- `monthly_any_week_day_last_week`\n\n### Other Options\n\n- `monthly_last_day_of_month`\n- `monthly_any_week_day_of_month`\n- `monthly_any_day_of_month`\n\n## Defining a quarterly frequency\n\n### First Days\n\n- `quarterly_first_day`\n- `quarterly_first_week_day`\n- `quarterly_first_$DAY$`\n  - Ex. `quarterly_first_MO`\n\n### Last Days\n\n- `quarterly_last_day`\n- `quarterly_last_week_day`\n- `quarterly_last_$DAY$`\n  - Ex. `quarterly_last_MO`\n\n### Other Options\n\n- `quarterly_any_day_first_week`\n- `quarterly_any_day_second_week`\n- `quarterly_any_day_last_week`\n- `quarterly_any_day_first_month`\n- `quarterly_any_day_second_month`\n- `quarterly_any_day_third_month`\n',
-  {
+- \`quarterly_any_day_first_week\`
+- \`quarterly_any_day_second_week\`
+- \`quarterly_any_day_last_week\`
+- \`quarterly_any_day_first_month\`
+- \`quarterly_any_day_second_month\`
+- \`quarterly_any_day_third_month\``,
+  { // MODIFIED: Was z.object()
     body: z.object({
-      frequency: z.string(),
-      deadlineType: z.string().optional(),
-      duration: z.any().optional(),
-      startingOn: z.string().optional(),
-      idealTime: z.string().optional(),
-      schedule: z.string().optional(),
-      name: z.string(),
-      workspaceId: z.string(),
-      description: z.string().optional(),
-      priority: z.string(),
-      assigneeId: z.string()
+      frequency: z.string().describe("The recurrence rule for the task. Refer to the main tool description for detailed format examples like 'daily_every_day' or 'weekly_specific_days_[MO,WE,FR]'."),
+      deadlineType: z.string().optional().describe("Optional. The type of deadline for the recurring task (e.g., 'SOFT', 'HARD')."),
+      duration: z.string().optional().describe("Optional. The duration of each instance of the recurring task. Send numbers as strings (e.g., \"30\" for 30 minutes), or use specific keywords like \"NONE\" or \"REMINDER\".") ,
+      startingOn: z.string().optional().describe("Optional. The date when the recurring task should first start, in YYYY-MM-DD format."),
+      idealTime: z.string().optional().describe("Optional. The ideal time of day for the task to be scheduled, if applicable (e.g., '09:00')."),
+      schedule: z.string().optional().describe("Optional. The name or ID of a specific schedule to use for these recurring tasks."),
+      name: z.string().describe("The name or title for the recurring task."),
+      workspaceId: z.string().describe("The ID of the workspace where the recurring task will be created."),
+      description: z.string().optional().describe("Optional. A description for the recurring task, in GitHub Flavored Markdown."),
+      priority: z.string().describe("The priority for the recurring task (e.g., 'ASAP', 'HIGH', 'MEDIUM', 'LOW')."),
+      assigneeId: z.string().describe("The ID of the user to whom the recurring tasks will be assigned.")
     })
   },
   async (params) => {
     try {
       const validatedParams = z.object({
         body: z.object({
-          frequency: z.string(),
-          deadlineType: z.string().optional(),
-          duration: z.any().optional(),
-          startingOn: z.string().optional(),
-          idealTime: z.string().optional(),
-          schedule: z.string().optional(),
-          name: z.string(),
-          workspaceId: z.string(),
-          description: z.string().optional(),
-          priority: z.string(),
-          assigneeId: z.string()
+          frequency: z.string().describe("The recurrence rule for the task. Refer to the main tool description for detailed format examples like 'daily_every_day' or 'weekly_specific_days_[MO,WE,FR]'."),
+          deadlineType: z.string().optional().describe("Optional. The type of deadline for the recurring task (e.g., 'SOFT', 'HARD')."),
+          duration: z.string().optional().describe("Optional. The duration of each instance of the recurring task. Send numbers as strings (e.g., \"30\" for 30 minutes), or use specific keywords like \"NONE\" or \"REMINDER\".") ,
+          startingOn: z.string().optional().describe("Optional. The date when the recurring task should first start, in YYYY-MM-DD format."),
+          idealTime: z.string().optional().describe("Optional. The ideal time of day for the task to be scheduled, if applicable (e.g., '09:00')."),
+          schedule: z.string().optional().describe("Optional. The name or ID of a specific schedule to use for these recurring tasks."),
+          name: z.string().describe("The name or title for the recurring task."),
+          workspaceId: z.string().describe("The ID of the workspace where the recurring task will be created."),
+          description: z.string().optional().describe("Optional. A description for the recurring task, in GitHub Flavored Markdown."),
+          priority: z.string().describe("The priority for the recurring task (e.g., 'ASAP', 'HIGH', 'MEDIUM', 'LOW')."),
+          assigneeId: z.string().describe("The ID of the user to whom the recurring tasks will be assigned.")
         })
       }).parse(params);
       
-      // Extraktion des body-Inhalts
       const { body } = validatedParams;
+
+      // Handle duration parsing
+      let apiDuration: string | number | undefined = body.duration;
+      if (typeof body.duration === 'string') {
+        const numericDuration = parseInt(body.duration, 10);
+        if (!isNaN(numericDuration) && numericDuration.toString() === body.duration) {
+          apiDuration = numericDuration;
+        } else {
+          // It's a non-numeric string like "NONE" or "REMINDER", keep as is
+          apiDuration = body.duration;
+        }
+      }
+
+      const apiBody = {
+        ...body,
+        duration: apiDuration
+      };
       
-      // Leeres Objekt für Query-Parameter
       const endpoint = parameterizeEndpoint('/recurring-tasks', {});
       
-      // Senden nur des body-Inhalts an die API
-      return callApi(endpoint, 'POST', body, 'application/json');
+      return callApi(endpoint, 'POST', apiBody, 'application/json');
     } catch (error) {
       if (error instanceof z.ZodError) {
         return {
@@ -1226,8 +1170,8 @@ registerTool(
 /* List Recurring Tasks */
 registerTool(
   'get_recurring-tasks',
-  'List Recurring Tasks',
-  {
+  `Lists all recurring task configurations for a specified workspace. Returns a paginated list. Each recurring task object can include details like its \`name\`, \`creator\`, \`assignee\`, associated \`project\`, \`status\`, \`priority\`, \`labels\`, and full \`workspace information\`. Use the \`cursor\` for pagination if many recurring tasks exist.`,
+  { // MODIFIED: Was z.object()
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
     workspaceId: z.string().describe('The id of the workspace you want tasks from.')
   },
@@ -1258,14 +1202,14 @@ registerTool(
 /* Delete a Recurring Task */
 registerTool(
   'delete_recurring-tasks_by_taskId',
-  'Delete a Recurring Task',
-  {
-    taskId: z.string()
+  `Permanently deletes a recurring task configuration based on its \`ID\`.`,
+  { // MODIFIED: Was z.object()
+    taskId: z.string().describe('The ID of the recurring task configuration to delete.')
   },
   async (params) => {
     try {
       const validatedParams = z.object({
-    taskId: z.string()
+    taskId: z.string().describe('The ID of the recurring task configuration to delete.')
   }).parse(params);
       const endpoint = parameterizeEndpoint('/recurring-tasks/{taskId}', validatedParams);
       return callApi(endpoint, 'DELETE');
@@ -1288,7 +1232,7 @@ registerTool(
 /* Get a list of schedules for your user */
 registerTool(
   'get_schedules',
-  'Get a list of schedules for your user',
+  `Get a list of schedules for your user`,
   {},
   async (params) => {
     try {
@@ -1314,8 +1258,14 @@ registerTool(
 /* List statuses for a workspace */
 registerTool(
   'get_statuses',
-  `Lists all available task statuses for a given workspace.\nThis tool always returns an array of status objects, and each object contains the following fixed fields:\n- \`name\`: The name of the status (e.g., \"Todo\", \"In Progress\").\n- \`isDefaultStatus\`: A boolean indicating if this is the default status for new tasks in the workspace.\n- \`isResolvedStatus\`: A boolean indicating if tasks with this status are considered resolved/completed.\n\nThis tool does *not* support the \`fields\` parameter.`,
-  {
+  `Lists all available task statuses for a given workspace.
+This tool always returns an array of status objects, and each object contains the following fixed fields:
+- \`name\`: The name of the status (e.g., "Todo", "In Progress").
+- \`isDefaultStatus\`: A boolean indicating if this is the default status for new tasks in the workspace.
+- \`isResolvedStatus\`: A boolean indicating if tasks with this status are considered resolved/completed.
+
+This tool does *not* support the \`fields\` parameter.`,
+  { // MODIFIED: Was z.object()
     workspaceId: z.string().describe('The ID of the workspace for which to retrieve statuses.')
   },
   async (params) => {
@@ -1333,8 +1283,6 @@ registerTool(
 
       let rawStatusesData;
       try {
-        // The API likely returns an object like { statuses: [] }
-        // or directly an array. We need to handle this. Assuming an array directly for now, or object with statuses key.
         const parsedResponse = JSON.parse(apiResponseWrapper.content[0].text);
         if (Array.isArray(parsedResponse)) {
           rawStatusesData = parsedResponse;
@@ -1356,19 +1304,16 @@ registerTool(
         };
       }
 
-      // Subtask 5.2 will use selectFieldsFromData here with GET_STATUSES_FIXED_FIELDS
       const processedData = selectFieldsFromData(
         rawStatusesData,
-        GET_STATUSES_FIXED_FIELDS, // Use fixed fields as per PRD 2.4
-        GET_STATUSES_FIXED_FIELDS  // Defaults are the same as fixed fields
+        GET_STATUSES_FIXED_FIELDS, 
+        GET_STATUSES_FIXED_FIELDS  
       );
 
       return {
         content: [
           {
             type: 'text',
-            // If the original response was wrapped (e.g. {statuses: [], meta: {}}), re-wrap if necessary.
-            // For now, returning the processed array directly.
             text: JSON.stringify(processedData) 
           }
         ]
@@ -1393,55 +1338,103 @@ registerTool(
 /* Update a Task */
 registerTool(
   'patch_tasks_by_taskId',
-  `Updates an existing task identified by its unique ID. You can modify various attributes of the task such as its name, due date, assignee, status, and more. This tool supports partial updates, meaning only the fields you provide in the request body will be changed.\\n\\n**Request Parameters:**\\n\\n*   \\\`taskId\\\` (string, required): The unique identifier of the task you want to update.\\n*   \\\`fields\\\` (array of strings, optional): Specify which fields of the updated task object should be included in the response. If omitted, a default set of fields (identical to those returned by the \\\`get_tasks_by_taskId\\\` tool) will be provided.\\n*   \\\`body\\\` (object, required): An object containing the task attributes you wish to update. Provide only the fields you want to change:\\n    *   \\\`name\\\` (string, optional): The new name or title for the task.\\n    *   \\\`dueDate\\\` (string, optional): The task's new due date. Accepts YYYY-MM-DD format or a full ISO 8601 timestamp. This can be crucial for auto-scheduling.\\n    *   \\\`assigneeId\\\` (string or null, optional): The ID of the user to assign the task to. To unassign the task, provide \\\`null\\\`.\\n    *   \\\`duration\\\` (number or string, optional): The task's duration. This can be an integer representing minutes (e.g., 30 for 30 minutes), or specific string values like \"NONE\" (for no duration) or \"REMINDER\" (for a reminder task).\\n    *   \\\`status\\\` (string, optional): The new status name for the task (e.g., \"In Progress\", \"Completed\"). Ensure the status exists in the workspace.\\n    *   \\\`autoScheduled\\\` (object or null, optional): An object to configure auto-scheduling for the task, or \\\`null\\\` to disable auto-scheduling.\\n        *   If an object is provided, it can contain:\\n            *   \\\`startDate\\\` (string, optional): The date when auto-scheduling should begin (YYYY-MM-DD or ISO 8601).\\n            *   \\\`deadlineType\\\` (string, optional): The type of deadline for auto-scheduling (e.g., \"SOFT\", \"HARD\").\\n            *   \\\`schedule\\\` (string, optional): The name or ID of a specific schedule to use.\\n        *   Note: The task's target status must have auto-scheduling enabled in Motion for these settings to take effect.\\n    *   \\\`projectId\\\` (string, optional): The ID of the project to associate this task with.\\n    *   \\\`description\\\` (string, optional): The updated task description, which can include GitHub Flavored Markdown.\\n    *   \\\`priority\\\` (string, optional): The task's priority level. Valid values are \"ASAP\", \"HIGH\", \"MEDIUM\", \"LOW\".\\n    *   \\\`labels\\\` (array of strings, optional): An array of label names to set on the task. This will replace any existing labels on the task.\\n\\n**Response Structure:**\\n\\nUpon successful execution, this tool returns the **complete updated task object**. The specific fields included in this object depend on the optional \\\`fields\\\` parameter you provide in the request:\\n*   If you use the \\\`fields\\\` parameter, only the fields you specify will be returned.\\n*   If the \\\`fields\\\` parameter is omitted or empty, a default set of task fields will be returned.\\n\\n**The \"Available Response Fields\" for the updated task object, their data types, and how to access nested information (e.g., \\\`status.name\\\`, \\\`project.name\\\`, simplified \\\`creator.name\\\`, or array contents like \\\`assignees\\\`) are identical to those provided by the \\\`get_tasks_by_taskId\\\` tool.** Please refer to the documentation for \\\`get_tasks_by_taskId\\\` for a comprehensive list and detailed explanations of all possible response fields.\\n\\nIf the update operation fails (e.g., due to a validation error on the input, an issue with the Motion API, or if the task ID is not found), the tool will return an object in the format: \\\`{ \"status\": \"FAILURE\", \"id\": \"TASK_ID_OR_NULL\" }\\\`. The \\\`id\\\` will be the \\\`taskId\\\` you provided if the failure occurred after identifying the task, or \\\`null\\\` if the failure was more general.\\n\\n**Examples:**\\n\\n1.  **Update task name and priority:**\\n    \\\`\\\`\\\`json\\n    {\\n      \"taskId\": \"task_123abc\",\\n      \"body\": {\\n        \"name\": \"Finalize Q3 Report Document\",\\n        \"priority\": \"HIGH\"\\n      }\\n    }\\n    \\\`\\\`\\\`\\n\\n2.  **Change due date, assign to a user, and request specific fields in response:**\\n    \\\`\\\`\\\`json\\n    {\\n      \"taskId\": \"task_456def\",\\n      \"fields\": [\"id\", \"name\", \"dueDate\", \"assignees\"],\\n      \"body\": {\\n        \"dueDate\": \"2024-09-15\",\\n        \"assigneeId\": \"user_789xyz\"\\n      }\\n    }\\n    \\\`\\\`\\\`\\n\\n3.  **Disable auto-scheduling for a task:**\\n    \\\`\\\`\\\`json\\n    {\\n      \"taskId\": \"task_789ghi\",\\n      \"body\": {\\n        \"autoScheduled\": null\\n      }\\n    }\\n    \\\`\\\`\\\`\\n\\n4.  **Update description and add labels:**\\n    \\\`\\\`\\\`json\\n    {\\n      \"taskId\": \"task_101jkl\",\\n      \"body\": {\\n        \"description\": \"Remember to attach the appendix.\\\\n- Item 1\\\\n- Item 2\",\\n        \"labels\": [\"urgent\", \"review-needed\"]\\n      }\\n    }\\n    \\\`\\\`\\\`\\nThe response is the updated task object, formatted based on the \\\`fields\\\` parameter or defaults (similar to get_tasks_by_taskId).\\`,
-  z.object({ // MODIFIED: Wrapped with z.object()
-    taskId: z.string(),
+  `Updates an existing task identified by its unique ID. You can modify various attributes of the task such as its name, due date, assignee, status, and more. This tool supports partial updates, meaning only the fields you provide in the request body will be changed.
+
+**Request Parameters:**
+
+*   \`taskId\` (string, required): The unique identifier of the task you want to update.
+*   \`fields\` (array of strings, optional): Specify which fields of the updated task object should be included in the response. If omitted, a default set of fields (identical to those returned by the \`get_tasks_by_taskId\` tool) will be provided.
+*   \`body\` (object, required): An object containing the task attributes you wish to update. Provide only the fields you want to change:
+    *   \`name\` (string, optional): The new name or title for the task.
+    *   \`dueDate\` (string, optional): The task's new due date. Accepts YYYY-MM-DD format or a full ISO 8601 timestamp. This can be crucial for auto-scheduling.
+    *   \`assigneeId\` (string or null, optional): The ID of the user to assign the task to. To unassign the task, provide \`null\`.
+    *   \`duration\` (string, optional): The task's duration. Provide an integer as a string (e.g., "30" for 30 minutes), or a specific string values, either "NONE" or "REMINDER".
+    *   \`status\` (string, optional): The new status name for the task (e.g., "In Progress", "Completed"). Ensure the status exists in the workspace.
+    *   \`autoScheduled\` (object or null, optional): An object to configure auto-scheduling for the task, or \`null\` to disable auto-scheduling.
+        *   If an object is provided, it can contain:
+            *   \`startDate\` (string, optional): The date when auto-scheduling should begin (YYYY-MM-DD or ISO 8601).
+            *   \`deadlineType\` (string, optional): The type of deadline for auto-scheduling (e.g., "SOFT", "HARD").
+            *   \`schedule\` (string, optional): The name or ID of a specific schedule to use.
+        *   Note: The task's target status must have auto-scheduling enabled in Motion for these settings to take effect.
+    *   \`projectId\` (string, optional): The ID of the project to associate this task with.
+    *   \`description\` (string, optional): The updated task description, which can include GitHub Flavored Markdown.
+    *   \`priority\` (string, optional): The task's priority level. Valid values are "ASAP", "HIGH", "MEDIUM", "LOW".
+    *   \`labels\` (array of strings, optional): An array of label names to set on the task. This will replace any existing labels on the task.
+
+**Response Structure:**
+
+Upon successful execution, this tool returns the **complete updated task object**. The specific fields included in this object depend on the optional \`fields\` parameter you provide in the request:
+*   If you use the \`fields\` parameter, only the fields you specify will be returned.
+*   If the \`fields\` parameter is omitted or empty, a default set of task fields will be returned.
+
+**The "Available Response Fields" for the updated task object, their data types, and how to access nested information (e.g., \`status.name\`, \`project.name\`, simplified \`creator.name\`, or array contents like \`assignees\`) are identical to those provided by the \`get_tasks_by_taskId\` tool.** Please refer to the documentation for \`get_tasks_by_taskId\` for a comprehensive list and detailed explanations of all possible response fields.
+
+The response is the updated task object, formatted based on the \`fields\` parameter or defaults (similar to get_tasks_by_taskId).`,
+  {
+    taskId: z.string().describe('The unique identifier of the task to retrieve.'),
     fields: z.array(z.string()).optional().describe('Optional. Specify which fields to include in the response. Uses defaults if not provided.'),
     body: z.object({
       name: z.string().optional().describe("The new title of the task."),
       dueDate: z.string().optional().describe("ISO 8601 string for the task\'s due date. Can be required for certain auto-scheduling configurations."),
       assigneeId: z.string().nullable().optional().describe("The ID of the user to assign the task to. Set to null to unassign."),
-      duration: z.union([z.string(), z.number()]).optional().describe("Task duration: an integer in minutes (e.g., 30), or specific strings like \\'NONE\\' or \\'REMINDER\\'."),
+      duration: z.string().optional().describe("Task duration: an integer sent as a string (e.g., \"30\"), or a specific strings, either \"NONE\" or \"REMINDER\"."),
       status: z.string().optional().describe("The new status for the task. If not provided, defaults to the workspace default or remains unchanged."),
       autoScheduled: z.object({
         startDate: z.string().optional().describe("The date when auto-scheduling should begin (ISO 8601 string)."),
-        deadlineType: z.string().optional().describe("The type of deadline for auto-scheduling (e.g., \\'SOFT\\', \\'HARD\\'."),
+        deadlineType: z.string().optional().describe("The type of deadline for auto-scheduling (e.g., \"SOFT\", \"HARD\")."),
         schedule: z.string().optional().describe("The name or ID of the specific schedule to use for auto-scheduling.")
       }).nullable().optional().describe("Object to configure auto-scheduling, or null to disable. Task\'s status must have auto-scheduling enabled."),
       projectId: z.string().optional().describe("The ID of the project to associate the task with."),
       description: z.string().optional().describe("The task\'s description, in GitHub Flavored Markdown."),
-      priority: z.string().optional().describe('Set the task\'s priority. Valid values: "ASAP", "HIGH", "MEDIUM", "LOW".'),
+      priority: z.string().optional().describe("Set the task\'s priority. Valid values: \"ASAP\", \"HIGH\", \"MEDIUM\", \"LOW\"."),
       labels: z.array(z.string()).optional().describe("An array of label names to set on the task. This will typically replace existing labels.")
     })
-  }),
+  },
   async (params) => {
     const originalTaskId = params.taskId; // Store for error reporting
     try {
       const validatedParams = z.object({
-        taskId: z.string(),
+        taskId: z.string().describe('The unique identifier of the task to retrieve.'),
         fields: z.array(z.string()).optional(), // Validate fields parameter
         body: z.object({
           name: z.string().optional().describe("The new title of the task."),
           dueDate: z.string().optional().describe("ISO 8601 string for the task\'s due date. Can be required for certain auto-scheduling configurations."),
           assigneeId: z.string().nullable().optional().describe("The ID of the user to assign the task to. Set to null to unassign."),
-          duration: z.union([z.string(), z.number()]).optional().describe("Task duration: an integer in minutes (e.g., 30), or specific strings like \\'NONE\\' or \\'REMINDER\\'."),
+          duration: z.string().optional().describe("Task duration: an integer sent as a string (e.g., \"30\"), or a specific strings, either \"NONE\" or \"REMINDER\"."),
           status: z.string().optional().describe("The new status for the task. If not provided, defaults to the workspace default or remains unchanged."),
           autoScheduled: z.object({
             startDate: z.string().optional().describe("The date when auto-scheduling should begin (ISO 8601 string)."),
-            deadlineType: z.string().optional().describe("The type of deadline for auto-scheduling (e.g., \\'SOFT\\', \\'HARD\\'."),
+            deadlineType: z.string().optional().describe("The type of deadline for auto-scheduling (e.g., \"SOFT\", \"HARD\")."),
             schedule: z.string().optional().describe("The name or ID of the specific schedule to use for auto-scheduling.")
           }).nullable().optional().describe("Object to configure auto-scheduling, or null to disable. Task\'s status must have auto-scheduling enabled."),
           projectId: z.string().optional().describe("The ID of the project to associate the task with."),
           description: z.string().optional().describe("The task\'s description, in GitHub Flavored Markdown."),
-          priority: z.string().optional().describe('Set the task\'s priority. Valid values: "ASAP", "HIGH", "MEDIUM", "LOW".'),
+          priority: z.string().optional().describe("Set the task\'s priority. Valid values: \"ASAP\", \"HIGH\", \"MEDIUM\", \"LOW\"."),
           labels: z.array(z.string()).optional().describe("An array of label names to set on the task. This will typically replace existing labels.")
         })
       }).parse(params);
       
       const { taskId, body, fields } = validatedParams;
       
+      // Process duration from string to number if applicable
+      let apiDuration: string | number | undefined = body.duration;
+      if (typeof body.duration === 'string') {
+        const numericDuration = parseInt(body.duration, 10);
+        if (!isNaN(numericDuration) && numericDuration.toString() === body.duration) {
+          apiDuration = numericDuration;
+        } else {
+          // It's a non-numeric string like "NONE" or "REMINDER", keep as is
+          apiDuration = body.duration;
+        }
+      }
+
+      const apiBody = {
+        ...body,
+        duration: apiDuration
+      };
+      
       const endpoint = parameterizeEndpoint('/tasks/{taskId}', { taskId });
-      const apiResponseWrapper = await callApi(endpoint, 'PATCH', body, 'application/json');
+      const apiResponseWrapper = await callApi(endpoint, 'PATCH', apiBody, 'application/json');
 
       if (apiResponseWrapper.isError) {
         // API call failed (e.g., network error, Motion API error like 4xx/5xx)
@@ -1520,19 +1513,71 @@ registerTool(
 /* Retrieve a Task */
 registerTool(
   'get_tasks_by_taskId',
-  `Retrieves detailed information for a single task, specified by its ID.\nUse the \`fields\` parameter to select the exact information you need.\n\n**Available Response Fields:**\n\n1.  **Simple Fields** (directly accessible):\n    *   \`id\`, \`name\`, \`description\`, \`duration\`, \`dueDate\` (YYYY-MM-DD format),\n    *   \`deadlineType\`, \`completed\` (boolean), \`completedTime\` (YYYY-MM-DD format, or null if not completed),\n    *   \`updatedTime\`, \`startOn\` (YYYY-MM-DD format), \`priority\`, \`scheduledStart\` (timestamp or null),\n    *   \`scheduledEnd\` (timestamp or null), \`schedulingIssue\` (boolean),\n    *   \`createdTime\`, \`lastInteractedTime\`.\n\n2.  **Nested Object Fields** (use dot notation for direct access to sub-fields):\n    *   \`creator.id\`, \`creator.name\`, \`creator.email\`\n    *   \`workspace.id\`, \`workspace.name\`, \`workspace.type\`\n    *   \`project.id\`, \`project.name\`, \`project.description\` (Note: if the task is associated with a project)\n    *   \`status.name\`, \`status.isDefaultStatus\`, \`status.isResolvedStatus\`\n    *   **Note on simplified access for certain objects:** If you request \`creator\`, \`workspace\`, or \`project\` directly in the \`fields\` parameter (e.g., \`fields: [\"creator\"]\`), you will receive a simplified object containing just the name (e.g., \`{\"creator.name\": \"Actual Creator Name\"}\`). To get all specific sub-fields listed above, request them explicitly using dot notation (e.g., \`fields: [\"creator.id\", \"creator.name\"]\`).\n\n3.  **Array Fields:**\n    *   \`assignees\` (Note: Requesting \`assignees\` via \`fields: [\"assignees\"]\` returns an array of objects, each simplified to contain just the assignee\'s name: \`[{ name: \'Assignee Name1\' }, ...]\`. For full assignee details, use the \`get_users\` tool with their IDs if needed.)\n    *   \`labels\` (Note: Returns an array of label strings associated with the task, e.g., \`[\"urgent\", \"bug\"]\`.)\n    *   \`chunks\` (Note: Returns an array of task chunks (scheduled time blocks). Each chunk object includes fields like \`id\`, \`duration\`, \`scheduledStart\` (timestamp), \`scheduledEnd\` (timestamp), \`completedTime\` (timestamp or null), \`isFixed\` (boolean). Dates within chunks are also formatted to YYYY-MM-DD where applicable by the underlying processing logic.)\n\n**Examples:**\n- For basic task information: \`fields: [\"id\", \"name\", \"status.name\", \"dueDate\"]\`\n- For scheduling details including chunks: \`fields: [\"id\", \"name\", \"scheduledStart\", \"scheduledEnd\", \"duration\", \"chunks\"]\`\n- To include creator name and assignee names: \`fields: [\"id\", \"name\", \"creator\", \"assignees\"]\`\n- To get specific project details: \`fields: [\"id\", \"name\", \"project.id\", \"project.name\"]\`\n\n**Default Fields** (if the \`fields\` parameter is not provided or is empty):\n${GET_TASK_BY_ID_DEFAULT_FIELDS.join(', ')}`,
-  {
+  `Retrieves detailed information for a single task, specified by its ID.
+Use the \`fields\` parameter to select the exact information you need.
+
+**Available Response Fields:**
+
+1.  **Simple Fields** (directly accessible):
+    *   \`id\`, \`name\`, \`description\`, \`duration\`, \`dueDate\` (YYYY-MM-DD format),
+    *   \`deadlineType\`, \`completed\` (boolean), \`completedTime\` (YYYY-MM-DD format, or null if not completed),
+    *   \`updatedTime\`, \`startOn\` (YYYY-MM-DD format), \`priority\`, \`scheduledStart\` (timestamp or null),
+    *   \`scheduledEnd\` (timestamp or null), \`schedulingIssue\` (boolean),
+    *   \`createdTime\`, \`lastInteractedTime\`.
+
+2.  **Nested Object Fields** (use dot notation for direct access to sub-fields):
+    *   \`creator.id\`, \`creator.name\`, \`creator.email\`
+    *   \`workspace.id\`, \`workspace.name\`, \`workspace.type\`
+    *   \`project.id\`, \`project.name\`, \`project.description\` (Note: if the task is associated with a project)
+    *   \`status.name\`, \`status.isDefaultStatus\`, \`status.isResolvedStatus\`
+    *   **Note on simplified access for certain objects:** If you request \`creator\`, \`workspace\`, or \`project\` directly in the \`fields\` parameter (e.g., \`fields: ["creator"]\`), you will receive a simplified object containing just the name (e.g., \`{"creator.name": "Actual Creator Name"}\`). To get all specific sub-fields listed above, request them explicitly using dot notation (e.g., \`fields: ["creator.id", "creator.name"]\`).
+
+3.  **Array Fields:**
+    *   \`assignees\` (Note: Requesting \`assignees\` via \`fields: ["assignees"]\` returns an array of objects, each simplified to contain just the assignee's name: \`[{ name: 'Assignee Name1' }, ...]\`. For full assignee details, use the \`get_users\` tool with their IDs if needed.)
+    *   \`labels\` (Note: Returns an array of label strings associated with the task, e.g., \`["urgent", "bug"]\`.)
+    *   \`chunks\` (Note: Returns an array of task chunks (scheduled time blocks). Each chunk object includes fields like \`id\`, \`duration\`, \`scheduledStart\` (timestamp), \`scheduledEnd\` (timestamp), \`completedTime\` (timestamp or null), \`isFixed\` (boolean). Dates within chunks are also formatted to YYYY-MM-DD where applicable by the underlying processing logic.)
+
+**Examples:**
+- For basic task information: \`fields: ["id", "name", "status.name", "dueDate"]\`
+- For scheduling details including chunks: \`fields: ["id", "name", "scheduledStart", "scheduledEnd", "duration", "chunks"]\`
+- To include creator name and assignee names: \`fields: ["id", "name", "creator", "assignees"]\`
+- To get specific project details: \`fields: ["id", "name", "project.id", "project.name"]\`
+
+**Default Fields** (if the \`fields\` parameter is not provided or is empty):
+${GET_TASK_BY_ID_DEFAULT_FIELDS.join(', ')}`,
+  { // Plain object, NOT z.object()
     taskId: z.string().describe('The unique identifier of the task to retrieve.'),
     fields: z.array(z.string()).optional().describe('Optional. Specify which fields to include in the response. Uses defaults if not provided. See tool description for available fields and examples.')
   },
-  async (params) => {
+  async (params: any) => {
+    console.error(`[MCP Server get_tasks_by_taskId] Received params raw:`, JSON.stringify(params, null, 2));
     try {
+      // REINSTATE Zod parsing of the params object for robustness
       const validatedParams = z.object({
-        taskId: z.string().describe('The unique identifier of the task to retrieve.'),
+        taskId: z.string().describe('The unique identifier of the task to retrieve.'), // Ensure this exact schema matches registration
         fields: z.array(z.string()).optional().describe('Optional. Specify which fields to include in the response. Uses defaults if not provided. See tool description for available fields and examples.')
       }).parse(params);
       
-      const endpoint = parameterizeEndpoint('/tasks/{taskId}', { taskId: validatedParams.taskId });
+      // Use a different name for clarity if needed, or just use validatedParams.taskId
+      const taskId = validatedParams.taskId;
+      const fields = validatedParams.fields;
+
+      // The manual check below is now redundant if Zod parse succeeds
+      /*
+      if (!taskId || typeof taskId !== 'string') {
+        console.error('[MCP Server get_tasks_by_taskId] Validation Error: taskId is missing or not a string. Params:', JSON.stringify(params, null, 2));
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ error: 'Validation error', details: [{ code: 'invalid_type', expected: 'string', received: typeof taskId, path: ['taskId'], message: 'Required' }] })
+            }
+          ]
+        };
+      }
+      */
+      
+      const endpoint = parameterizeEndpoint('/tasks/{taskId}', { taskId: taskId });
       const apiResponseWrapper = await callApi(endpoint, 'GET');
 
       if (apiResponseWrapper.isError) {
@@ -1543,7 +1588,7 @@ registerTool(
       try {
         rawTaskData = JSON.parse(apiResponseWrapper.content[0].text);
       } catch (e) {
-        console.error(`Failed to parse task data for taskId ${validatedParams.taskId}:`, e);
+        console.error(`Failed to parse task data for taskId ${taskId}:`, e);
         return {
           content: [
             {
@@ -1555,10 +1600,9 @@ registerTool(
         };
       }
 
-      // Integrate selectFieldsFromData
       const processedData = selectFieldsFromData(
         rawTaskData, 
-        validatedParams.fields, 
+        fields, 
         GET_TASK_BY_ID_DEFAULT_FIELDS,
         GET_TASK_BY_ID_TOOL_SPECIFIC_RULES
       );
@@ -1573,17 +1617,26 @@ registerTool(
       };
 
     } catch (error) {
+      console.error(`[MCP Server get_tasks_by_taskId] Handler error:`, error, 'Params raw:', JSON.stringify(params, null, 2));
       if (error instanceof z.ZodError) {
+        // This will now catch errors if 'params' doesn't match the expected Zod schema
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ error: 'Validation error', details: error.errors })
+              text: JSON.stringify({ error: 'Validation error in handler', details: error.errors })
             }
           ]
         };
       }
-      throw error;
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ error: 'Internal tool error', details: error.message })
+          }
+        ]
+      };
     }
   }
 );
@@ -1591,15 +1644,15 @@ registerTool(
 /* Delete a Task */
 registerTool(
   'delete_tasks_by_taskId',
-  'Delete a Task',
-  {
-    taskId: z.string()
+  `Permanently deletes a task based on its \`ID\`.`,
+  { // MODIFIED: Was z.object()
+    taskId: z.string().describe('The ID of the task to delete.')
   },
   async (params) => {
     try {
       const validatedParams = z.object({
-    taskId: z.string()
-  }).parse(params);
+        taskId: z.string().describe('The ID of the task to delete.')
+      }).parse(params);
       const endpoint = parameterizeEndpoint('/tasks/{taskId}', validatedParams);
       return callApi(endpoint, 'DELETE');
     } catch (error) {
@@ -1618,78 +1671,24 @@ registerTool(
   }
 );
 
-/* ## Description Input
+registerTool(
+  'post_tasks',
+  `Creates a new task in a specified workspace.
 
+## Description Input
 When passing in a task description, the input will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).
 
-registerTool(
-  'post_tasks',
-  '## Description Input\\n\\nWhen passing in a task description, the input will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).\\n',
-  {
-    body: z.object({
-      dueDate: z.string().optional(),
-      duration: z.any().optional(),
-      status: z.string().optional(),
-      autoScheduled: z.object({
-      startDate: z.string().optional(),
-      deadlineType: z.string().optional(),
-      schedule: z.string().optional()
-    }).nullable().optional(),
-      name: z.string(),
-      projectId: z.string().optional(),
-      workspaceId: z.string(),
-      description: z.string().optional(),
-      priority: z.string().optional(),
-      labels: z.array(z.string()).optional(),
-      assigneeId: z.string().optional()
-    })
-  },
-  async (params) => {
-    try {
-      const validatedParams = z.object({
-    body: z.object({
-      dueDate: z.string().optional(),
-      duration: z.any().optional(),
-      status: z.string().optional(),
-      autoScheduled: z.object({
-      startDate: z.string().optional(),
-      deadlineType: z.string().optional(),
-      schedule: z.string().optional()
-    }).nullable().optional(),
-      name: z.string(),
-      projectId: z.string().optional(),
-      workspaceId: z.string(),
-      description: z.string().optional(),
-      priority: z.string().optional(),
-      labels: z.array(z.string()).optional(),
-      assigneeId: z.string().optional()
-    })
-  }).parse(params);
-      const endpoint = parameterizeEndpoint('/tasks', validatedParams);
-      return callApi(endpoint, 'POST', validatedParams, 'application/json');
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ error: 'Validation error', details: error.errors })
-            }
-          ]
-        };
-      }
-      throw error;
-    }
-  }
-);
- */
-registerTool(
-  'post_tasks',
-  `Creates a new task in a specified workspace.\n\n## Description Input\nWhen passing in a task description, the input will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).\n\n**Request Body Parameters:**\n- **Required:** \`name\` (string), \`workspaceId\` (string)\n- **Optional:** \`description\` (string), \`dueDate\` (string, YYYY-MM-DD or ISO 8601), \`duration\` (number in minutes, or string \"NONE\"/\"REMINDER\"), \`status\` (string, status name), \`priority\` (string: \"ASAP\", \"HIGH\", \"MEDIUM\", \"LOW\"), \`assigneeId\` (string, user ID), \`projectId\` (string), \`labels\` (array of strings), \`autoScheduled\` (object or null).\n\n**Response Format:**\nOn success, returns \`{ \"status\": \"SUCCESS\", \"id\": \"<NEW_TASK_ID>\" }\`.\nOn failure, returns \`{ \"status\": \"FAILURE\", \"id\": null }\`.`,
+**Request Body Parameters:**
+- **Required:** \`name\` (string), \`workspaceId\` (string)
+- **Optional:** \`description\` (string), \`dueDate\` (string, YYYY-MM-DD or ISO 8601), \`duration\` (send numbers as strings like \"30\" for minutes, or keywords like \"NONE\"/\"REMINDER\"), \`status\` (string, status name), \`priority\` (string: "ASAP", "HIGH", "MEDIUM", "LOW"), \`assigneeId\` (string, user ID), \`projectId\` (string), \`labels\` (array of strings), \`autoScheduled\` (object or null).
+
+**Response Format:**
+On success, returns \`{ "status": "SUCCESS", "id": "<NEW_TASK_ID>" }\`.
+On failure, returns \`{ "status": "FAILURE", "id": null }\`.`,
   {
     body: z.object({
       dueDate: z.string().optional().describe("Optional. Task due date in YYYY-MM-DD or ISO 8601 format."),
-      duration: z.any().optional().describe("Optional. Task duration in minutes (number) or specific strings like \'NONE\' or \'REMINDER\'."),
+      duration: z.string().optional().describe("Optional. Task duration. Send numbers as strings (e.g., \"30\" for 30 minutes), or specific keywords like \"NONE\" or \"REMINDER\"."),
       status: z.string().optional().describe("Optional. Name of the status to assign the task."),
       autoScheduled: z.object({
         startDate: z.string().optional().describe("Date auto-scheduling should begin (YYYY-MM-DD or ISO 8601 format)."),
@@ -1710,7 +1709,7 @@ registerTool(
       const validatedParams = z.object({
         body: z.object({
           dueDate: z.string().optional().describe("Optional. Task due date in YYYY-MM-DD or ISO 8601 format."),
-          duration: z.any().optional().describe("Optional. Task duration in minutes (number) or specific strings like \'NONE\' or \'REMINDER\'."),
+          duration: z.string().optional().describe("Optional. Task duration. Send numbers as strings (e.g., \"30\" for 30 minutes), or specific keywords like \"NONE\" or \"REMINDER\"."),
           status: z.string().optional().describe("Optional. Name of the status to assign the task."),
           autoScheduled: z.object({
             startDate: z.string().optional().describe("Date auto-scheduling should begin (YYYY-MM-DD or ISO 8601 format)."),
@@ -1727,8 +1726,25 @@ registerTool(
         })
       }).parse(params);
       
+      // Handle duration parsing for post_tasks
+      let apiDuration: string | number | undefined = validatedParams.body.duration;
+      if (typeof validatedParams.body.duration === 'string') {
+        const numericDuration = parseInt(validatedParams.body.duration, 10);
+        if (!isNaN(numericDuration) && numericDuration.toString() === validatedParams.body.duration) {
+          apiDuration = numericDuration;
+        } else {
+          // It's a non-numeric string like "NONE" or "REMINDER", keep as is
+          apiDuration = validatedParams.body.duration;
+        }
+      }
+
+      const apiBody = {
+        ...validatedParams.body,
+        duration: apiDuration // Use the potentially parsed duration
+      };
+
       const endpoint = parameterizeEndpoint('/tasks', {});
-      const apiResponseWrapper = await callApi(endpoint, 'POST', validatedParams.body, 'application/json');
+      const apiResponseWrapper = await callApi(endpoint, 'POST', apiBody, 'application/json');
 
       if (apiResponseWrapper.isError) {
         // callApi already includes error details, but PRD wants specific format for post_tasks failure
@@ -1794,56 +1810,6 @@ registerTool(
   }
 );
 
-/* <!-- theme: warning -->
-
-> ### Note
->
-> By default, all tasks that are completed are left out unless
-> specifically filtered for via the status.
-
-registerTool(
-  'get_tasks',
-  '<!-- theme: warning -->\\n\\n> ### Note\\n>\\n> By default, all tasks that are completed are left out unless\\n> specifically filtered for via the status.\\n',
-  {
-    cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
-    label: z.string().optional().describe('Limit tasks returned by label on the task'),
-    status: z.array(z.string()).optional().describe('Limit tasks returned by statuses that exist on tasks, cannot specify this (\'status\')\\nAND includeAllStatuses in the same request'),
-    includeAllStatuses: z.boolean().optional().describe('Limit tasks returned by statuses that exist on tasks, cannot specify this (\'includeAllStatuses\')\\nAND status in the same request'),
-    workspaceId: z.string().optional().describe('The id of the workspace you want tasks from. If not provided, will return tasks from all workspaces the user is a member of.'),
-    projectId: z.string().optional().describe('Limit tasks returned to a given project'),
-    name: z.string().optional().describe('Limit tasks returned to those that contain this string. Case in-sensitive'),
-    assigneeId: z.string().optional().describe('Limit tasks returned to a specific assignee')
-  },
-  async (params) => {
-    try {
-      const validatedParams = z.object({
-    cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
-    label: z.string().optional().describe('Limit tasks returned by label on the task'),
-    status: z.array(z.string()).optional().describe('Limit tasks returned by statuses that exist on tasks, cannot specify this (\'status\')\\nAND includeAllStatuses in the same request'),
-    includeAllStatuses: z.boolean().optional().describe('Limit tasks returned by statuses that exist on tasks, cannot specify this (\'includeAllStatuses\')\\nAND status in the same request'),
-    workspaceId: z.string().optional().describe('The id of the workspace you want tasks from. If not provided, will return tasks from all workspaces the user is a member of.'),
-    projectId: z.string().optional().describe('Limit tasks returned to a given project'),
-    name: z.string().optional().describe('Limit tasks returned to those that contain this string. Case in-sensitive'),
-    assigneeId: z.string().optional().describe('Limit tasks returned to a specific assignee')
-  }).parse(params);
-      const endpoint = parameterizeEndpoint('/tasks', validatedParams);
-      return callApi(endpoint, 'GET');
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ error: 'Validation error', details: error.errors })
-            }
-          ]
-        };
-      }
-      throw error;
-    }
-  }
-);
- */
 
 registerTool(
   'get_tasks',
@@ -1852,30 +1818,30 @@ registerTool(
 **Available Response Fields:**
 
 1. **Simple Fields** (directly accessible):
-   - id, name, description, duration, dueDate, deadlineType
-   - completed, completedTime, updatedTime, startOn
-   - priority, scheduledStart, scheduledEnd, schedulingIssue
-   - createdTime, lastInteractedTime
+   - \`id\`, \`name\`, \`description\`, \`duration\`, \`dueDate\`, \`deadlineType\`
+   - \`completed\`, \`completedTime\`, \`updatedTime\`, \`startOn\`
+   - \`priority\`, \`scheduledStart\`, \`scheduledEnd\`, \`schedulingIssue\`
+   - \`createdTime\`, \`lastInteractedTime\`
 
 2. **Nested Object Fields** (use dot notation):
-   - creator.id, creator.name, creator.email
-   - workspace.id, workspace.name, workspace.type
-   - project.id, project.name, project.description, project.workspaceId
-   - status.name, status.isDefaultStatus, status.isResolvedStatus
+   - \`creator.id\`, \`creator.name\`, \`creator.email\`
+   - \`workspace.id\`, \`workspace.name\`, \`workspace.type\`
+   - \`project.id\`, \`project.name\`, \`project.description\`, \`project.workspaceId\`
+   - \`status.name\`, \`status.isDefaultStatus\`, \`status.isResolvedStatus\`
 
 3. **Array Fields** (use array notation, see toolSpecificRules for simplifications):
-   - assignees[].id, assignees[].name, assignees[].email (default simplified to name)
-   - labels[] (array of strings)
-   - chunks[].id, chunks[].duration, chunks[].scheduledStart, chunks[].scheduledEnd, chunks[].completedTime, chunks[].isFixed
+   - \`assignees[].id\`, \`assignees[].name\`, \`assignees[].email\` (default simplified to name)
+   - \`labels[]\` (array of strings)
+   - \`chunks[].id\`, \`chunks[].duration\`, \`chunks[].scheduledStart\`, \`chunks[].scheduledEnd\`, \`chunks[].completedTime\`, \`chunks[].isFixed\`
 
 **Examples:**
-- For basic task info: fields=["id", "name", "status.name", "priority"]
-- For scheduling: fields=["id", "scheduledStart", "scheduledEnd", "duration"]
-- For assignee details: fields=["id", "name", "assignees"]
+- For basic task info: \`fields=["id", "name", "status.name", "priority"]\`
+- For scheduling: \`fields=["id", "scheduledStart", "scheduledEnd", "duration"]\`
+- For assignee details: \`fields=["id", "name", "assignees"]\`
 
 **Default Fields** (if none specified):
 ${GET_TASKS_DEFAULT_FIELDS.join(', ')}`,
-  {
+  { // MODIFIED: Was z.object()
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
     label: z.string().optional().describe('Limit tasks returned by label on the task'),
     status: z.array(z.string()).optional().describe('Limit tasks returned by statuses that exist on tasks, cannot specify this (\'status\')\nAND includeAllStatuses in the same request'),
@@ -1891,8 +1857,8 @@ ${GET_TASKS_DEFAULT_FIELDS.join(', ')}`,
       const validatedParams = z.object({
         cursor: z.string().optional(),
         label: z.string().optional(),
-        status: z.array(z.string()).optional(),
-        includeAllStatuses: z.boolean().optional(),
+        status: z.array(z.string()).optional().describe("Limit tasks returned by statuses that exist on tasks, cannot specify this ('status')\nAND includeAllStatuses in the same request"), // Corrected escapes
+        includeAllStatuses: z.boolean().optional().describe("Limit tasks returned by statuses that exist on tasks, cannot specify this ('includeAllStatuses')\nAND status in the same request"), // Corrected escapes
         workspaceId: z.string().optional(),
         projectId: z.string().optional(),
         name: z.string().optional(),
@@ -1900,16 +1866,14 @@ ${GET_TASKS_DEFAULT_FIELDS.join(', ')}`,
         fields: z.array(z.string()).optional()
       }).parse(params);
       
-      // Remove fields parameter from API call params
       const { fields, ...apiParams } = validatedParams;
       
       const endpoint = parameterizeEndpoint('/tasks', apiParams);
       const apiResponseWrapper = await callApi(endpoint, 'GET');
       
-      // Extract the actual API response data from the wrapper
       let apiResponse;
       if (apiResponseWrapper.isError) {
-        return apiResponseWrapper; // Return error if API call failed
+        return apiResponseWrapper;
       }
 
       if (apiResponseWrapper && 
@@ -1944,14 +1908,12 @@ ${GET_TASKS_DEFAULT_FIELDS.join(', ')}`,
         };
       }
       
-      // Check if we have a valid response with tasks
       if (apiResponse && apiResponse.tasks && Array.isArray(apiResponse.tasks)) {
-        // Use selectFieldsFromData for processing
         const processedTasks = selectFieldsFromData(
           apiResponse.tasks, 
           fields, 
           GET_TASKS_DEFAULT_FIELDS, 
-          GET_TASKS_TOOL_SPECIFIC_RULES // Use the new rules for get_tasks
+          GET_TASKS_TOOL_SPECIFIC_RULES
         );
         
         return {
@@ -1959,7 +1921,7 @@ ${GET_TASKS_DEFAULT_FIELDS.join(', ')}`,
             {
               type: 'text',
               text: JSON.stringify({
-                meta: apiResponse.meta, // Preserve meta if it exists
+                meta: apiResponse.meta, 
                 tasks: processedTasks
               })
             }
@@ -1967,6 +1929,7 @@ ${GET_TASKS_DEFAULT_FIELDS.join(', ')}`,
           isError: false
         };
       }
+      
       
       // If we can't transform, return an empty tasks array in the right format
       return {
@@ -2007,14 +1970,14 @@ ${GET_TASKS_DEFAULT_FIELDS.join(', ')}`,
  */
 registerTool(
   'delete_tasks_assignee',
-  '<!-- theme: warning -->\\n\\n> ### Note\\n>\\n> For simplicity, use this endpoint to unassign a task\\n> instead of the generic update task endpoint.\\n> This also prevents bugs and accidental unassignments.\\n',
+  `For simplicity, use this endpoint to unassign a task instead of the generic update task endpoint. This also prevents bugs and accidental unassignments.`,
   {
-    taskId: z.string()
+    taskId: z.string().describe('The ID of the task from which the assignee will be removed.')
   },
   async (params) => {
     try {
       const validatedParams = z.object({
-    taskId: z.string()
+    taskId: z.string().describe('The ID of the task from which the assignee will be removed.')
   }).parse(params);
       const endpoint = parameterizeEndpoint('/tasks/{taskId}/assignee', validatedParams);
       return callApi(endpoint, 'DELETE');
@@ -2034,31 +1997,36 @@ registerTool(
   }
 );
 
-/* ### Notes
-When moving tasks from one workspace to another,
-the tasks project, status, and label(s) and assignee will all be reset
- */
-/* ### Notes
-When moving tasks from one workspace to another,
-the tasks project, status, and label(s) and assignee will all be reset
- */
+
 registerTool(
   'patch_tasks_move',
-  '### Notes\\n\\nWhen moving tasks from one workspace to another,\\nthe tasks project, status, and label(s) and assignee will all be reset\\n',
+  `Moves a task to a different workspace. 
+
+**Path Parameter:**
+- \`taskId\` (string, required): The ID of the task to move.
+
+**Required Body Parameters:**
+- \`workspaceId\` (string): The ID of the target workspace.
+
+**Optional Body Parameters:**
+- \`assigneeId\` (string): The user ID to assign the task to in the new workspace.
+
+**Important Notes:**
+When moving tasks, the task\'s project, status, labels, and potentially other associations from the original workspace will be reset or unlinked according to Motion API behavior.`,
   {
-    taskId: z.string(),
+    taskId: z.string().describe("Required. The ID of the task to move."),
     body: z.object({
-      workspaceId: z.string(),
-      assigneeId: z.string().optional()
+      workspaceId: z.string().describe("Required. The ID of the workspace to which you want the task moved."),
+      assigneeId: z.string().optional().describe("Optional. The user ID the task should be assigned to in the new workspace.")
     })
   },
   async (params) => {
     try {
       const validatedParams = z.object({
-        taskId: z.string(),
+        taskId: z.string().describe("Required. The ID of the task to move."),
         body: z.object({
-          workspaceId: z.string(),
-          assigneeId: z.string().optional()
+          workspaceId: z.string().describe("Required. The ID of the workspace to which you want the task moved."),
+          assigneeId: z.string().optional().describe("Optional. The user ID the task should be assigned to in the new workspace.")
         })
       }).parse(params);
       
@@ -2089,7 +2057,18 @@ registerTool(
 /* List users */
 registerTool(
   'get_users',
-  `Lists users, optionally filtered by workspace or team. Supports pagination via \`cursor\`.\nThe response is an object containing a \`users\` array and potentially a \`meta\` object for pagination.\nEach user object in the array *always* contains the following fixed fields:\n- \`id\`: The user\'s unique identifier.\n- \`name\`: The user\'s name.\n- \`email\`: The user\'s email address.\n\nIf more results are available, the \`meta.cursor\` field will contain a string to pass to the \`cursor\` parameter for the next page.\nThis tool does *not* support the \`fields\` parameter.`,
+  `Lists users, optionally filtered by workspace or team. Supports pagination via \`cursor\`.
+
+The response is an object containing a \`users\` array and potentially a \`meta\` object for pagination.
+
+Each user object in the array *always* contains the following fixed fields:
+- \`id\`: The user\'s unique identifier.
+- \`name\`: The user\'s name.
+- \`email\`: The user\'s email address.
+
+If more results are available, the \`meta.cursor\` field will contain a string to pass to the \`cursor\` parameter for the next page.
+
+This tool does *not* support the \`fields\` parameter.`,
   {
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
     workspaceId: z.string().optional().describe("Optional. Filter users belonging to a specific workspace ID."),
@@ -2262,11 +2241,30 @@ registerTool(
 /* List workspaces */
 registerTool(
   'get_workspaces',
-  `Lists workspaces the current user has access to. Supports filtering by specific \`ids\`, pagination via \`cursor\`, and response customization via \`fields\`.\n\n**Available Response Fields:**\n\n1.  **Simple Fields:** \`id\`, \`name\`, \`type\` (e.g., \"INDIVIDUAL\"), \`teamId\` (ID string or null).\n2.  **Array Fields:**\n    *   \`labels\`: An array of label strings defined for the workspace.\n    *   \`taskStatuses\`: An array of status objects available in the workspace. Each object includes fields like \`name\`, \`isDefaultStatus\`, \`isResolvedStatus\`.\n\n**Meta Object (for pagination):**\n*   \`meta.cursor\`: If present, use this value in the \`cursor\` parameter of a subsequent call to fetch the next page of workspaces.\n\n**Examples:**\n- To get default info (id, name) for all workspaces: call without \`fields\`.\n- To get defaults plus task statuses: \`fields: [\"id\", \"name\", \"taskStatuses\"]\`\n- To get workspace type and labels: \`fields: [\"id\", \"name\", \"type\", \"labels\"]\`\n\n**Default Fields** (if \`fields\` parameter is not provided):\n${GET_WORKSPACES_DEFAULT_FIELDS.join(', ')}`,
+  `Lists workspaces the current user has access to. Supports filtering by specific \`ids\`, pagination via \`cursor\`, and response customization via \`fields\`.
+
+
+**Available Response Fields:**
+
+1.  **Simple Fields:** \`id\`, \`name\`, \`type\` (e.g., "INDIVIDUAL"), \`teamId\` (ID string or null).
+2.  **Array Fields:**
+    *   \`labels\`: An array of label strings defined for the workspace.
+    *   \`taskStatuses\`: An array of status objects available in the workspace. Each object includes fields like \`name\`, \`isDefaultStatus\`, \`isResolvedStatus\`.
+
+**Meta Object (for pagination):**
+*   \`meta.cursor\`: If present, use this value in the \`cursor\` parameter of a subsequent call to fetch the next page of workspaces.
+
+**Examples:**
+- To get default info (id, name) for all workspaces: call without \`fields\`.
+- To get defaults plus task statuses: \`fields: ["id", "name", "taskStatuses"]\`
+- To get workspace type and labels: \`fields: ["id", "name", "type", "labels"]\`
+
+**Default Fields** (if \`fields\` parameter is not provided):
+${GET_WORKSPACES_DEFAULT_FIELDS.join(', ')}`,
   {
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
     ids: z.array(z.string()).optional().describe("Optional. Filter results to include only workspaces with these specific IDs."),
-    fields: z.array(z.string()).optional().describe('Optional. Specify which fields to include in the response (e.g., [\"id\", \"name\", \"taskStatuses\"]). Uses defaults (id, name) if not provided.')
+    fields: z.array(z.string()).optional().describe('Optional. Specify which fields to include in the response (e.g., ["id", "name", "taskStatuses"]). Uses defaults (id, name) if not provided.')
   },
   async (params) => {
     try {
