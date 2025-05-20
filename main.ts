@@ -669,18 +669,18 @@ Use the \`fields\` parameter to select the exact information you need.
 
 **Available Response Fields:**
 
-1.  **Simple Fields** (directly accessible):
-    *   \`id\`, \`name\`, \`description\`, \`workspaceId\`, \`priorityLevel\`
-    *   \`dueDate\` (Note:YYYY-MM-DD format)
-    *   \`startDate\` (Note:YYYY-MM-DD format)
-    *   \`completedTime\` (Note:YYYY-MM-DD format, or null if not completed)
+1. **Simple Fields** (directly accessible):
+    * \`id\`, \`name\`, \`description\`, \`workspaceId\`, \`priorityLevel\`
+    * \`dueDate\` (Note: \`YYYY-MM-DD\` format)
+    * \`startDate\` (Note: \`YYYY-MM-DD\` format)
+    * \`completedTime\` (Note: \`YYYY-MM-DD\` format, or \`null\` if not completed)
 
-2.  **Nested Object Fields** (use dot notation):
-    *   \`manager.name\` (Note: To get the manager\\'s name, include "manager" in your \`fields\` request, e.g., \`fields: ["manager"]\`. The response will then contain \`manager.name\` with the name, or null if no manager is assigned.)
+2. **Nested Object Fields** (use dot notation):
+    * \`manager.name\` (Note: To get the manager\\'s name, include \`manager\` in your \`fields\` request, e.g., \`fields: ["manager"]\`. The response will then contain \`manager.name\` with the name, or \`null\` if no manager is assigned.)
 
 **Examples:**
-- For core project details: \`fields: ["id", "name", "description", "dueDate"]\`
-- To include the manager\\'s name: \`fields: ["id", "name", "manager"]\`
+* For core project details: \`fields: ["id", "name", "description", "dueDate"]\`
+* To include the manager\\'s name: \`fields: ["id", "name", "manager"]\`
 
 **Default Fields:** (when \`fields\` is omitted):
 ${GET_PROJECT_BY_ID_DEFAULT_FIELDS.join(', ')}`,
@@ -762,24 +762,24 @@ Supports pagination using the \`cursor\` parameter.
 
 **Available Response Fields:**
 
-1.  **Simple Fields** (directly accessible):
-    *   \`id\`, \`name\`, \`description\`, \`priorityLevel\`
-    *   \`dueDate\` (Note:YYYY-MM-DD format)
-    *   \`completedTime\` (Note:YYYY-MM-DD format, or null if not completed)
-    *   \`taskCount\`
-    *   \`workspaceId\`
+1. **Simple Fields** (directly accessible):
+    * \`id\`, \`name\`, \`description\`, \`priorityLevel\`
+    * \`dueDate\` (Note: \`YYYY-MM-DD\` format)
+    * \`completedTime\` (Note: \`YYYY-MM-DD\` format, or \`null\` if not completed)
+    * \`taskCount\`
+    * \`workspaceId\`
 
-2.  **Nested Object Fields** (use dot notation):
-    *   \`status.name\` (e.g., "In Progress" - this is the project\\'s overall status)
-    *   \`manager.name\` (Note: To get the manager\\'s name, include "manager" in your \`fields\` request, e.g., \`fields: ["manager"]\`. The response will then contain \`manager.name\` with the name, or null if no manager is assigned.)
+2. **Nested Object Fields** (use dot notation):
+    * \`status.name\` (e.g., \`"In Progress"\` - this is the project\\'s overall status)
+    * \`manager.name\` (Note: To get the manager\\'s name, include \`manager\` in your \`fields\` request, e.g., \`fields: ["manager"]\`. The response will then contain \`manager.name\` with the name, or \`null\` if no manager is assigned.)
 
-3.  **Meta Object** (for pagination):
-    *   \`meta.cursor\` (Note: If more projects are available, this field will contain a cursor string. Pass this string to the \`cursor\` parameter in your next call to fetch the subsequent set of projects.)
+3. **Meta Object** (for pagination):
+    * \`meta.cursor\` (Note: If more projects are available, this field will contain a cursor string. Pass this string to the \`cursor\` parameter in your next call to fetch the subsequent set of projects.)
 
 **Examples:**
-- For a basic list view: \`fields: ["id", "name", "status.name"]\`
-- To include manager\\'s name and due date: \`fields: ["id", "name", "dueDate", "manager"]\`
-- For description and task count: \`fields: ["id", "name", "description", "taskCount"]\`
+* For a basic list view: \`fields: ["id", "name", "status.name"]\`
+* To include manager\\'s name and due date: \`fields: ["id", "name", "dueDate", "manager"]\`
+* For description and task count: \`fields: ["id", "name", "description", "taskCount"]\`
 
 **Default Fields:** (when \`fields\` is omitted):
 ${GET_PROJECTS_DEFAULT_FIELDS.join(', ')}`,
@@ -874,10 +874,10 @@ registerTool(
 - \`workspaceId\` (string): The workspace ID for the project.
 
 **Optional Body Parameters:**
-- \`dueDate\` (string, ISO 8601 date, e.g., "2024-03-12T10:52:55.714-06:00"): Project due date.
+- \`dueDate\` (string, ISO 8601 date, e.g., \`"2024-03-12T10:52:55.714-06:00"\`): Project due date.
 - \`description\` (string): Project description. HTML input is accepted.
 - \`labels\` (array of string): List of label names for the project.
-- \`priority\` (string): Options: "ASAP", "HIGH", "MEDIUM" (default), "LOW".
+- \`priority\` (string): Options: \`"ASAP"\`, \`"HIGH"\`, \`"MEDIUM"\` (default), \`"LOW"\`.
 
 **Response Format:**
 Response on success: \`{ status: "SUCCESS", id: "<NEW_PROJECT_ID>" }\`.
@@ -1519,30 +1519,30 @@ Use the \`fields\` parameter to select the exact information you need.
 
 **Available Response Fields:**
 
-1.  **Simple Fields** (directly accessible):
-    *   \`id\`, \`name\`, \`description\`, \`duration\`, \`dueDate\` (YYYY-MM-DD format),
-    *   \`deadlineType\`, \`completed\` (boolean), \`completedTime\` (YYYY-MM-DD format, or null if not completed),
-    *   \`updatedTime\`, \`startOn\` (YYYY-MM-DD format), \`priority\`, \`scheduledStart\` (timestamp or null),
-    *   \`scheduledEnd\` (timestamp or null), \`schedulingIssue\` (boolean),
-    *   \`createdTime\`, \`lastInteractedTime\`.
+1. **Simple Fields** (directly accessible):
+    * \`id\`, \`name\`, \`description\`, \`duration\`, \`dueDate\` (\`YYYY-MM-DD\` format),
+    * \`deadlineType\`, \`completed\` (boolean), \`completedTime\` (\`YYYY-MM-DD\` format, or \`null\` if not completed),
+    * \`updatedTime\`, \`startOn\` (\`YYYY-MM-DD\` format), \`priority\`, \`scheduledStart\` (timestamp or \`null\`),
+    * \`scheduledEnd\` (timestamp or \`null\`), \`schedulingIssue\` (boolean),
+    * \`createdTime\`, \`lastInteractedTime\`.
 
-2.  **Nested Object Fields** (use dot notation for direct access to sub-fields):
-    *   \`creator.id\`, \`creator.name\`, \`creator.email\`
-    *   \`workspace.id\`, \`workspace.name\`, \`workspace.type\`
-    *   \`project.id\`, \`project.name\`, \`project.description\` (Note: if the task is associated with a project)
-    *   \`status.name\`, \`status.isDefaultStatus\`, \`status.isResolvedStatus\`
-    *   **Note on simplified access for certain objects:** If you request \`creator\`, \`workspace\`, or \`project\` directly in the \`fields\` parameter (e.g., \`fields: ["creator"]\`), you will receive a simplified object containing just the name (e.g., \`{"creator.name": "Actual Creator Name"}\`). To get all specific sub-fields listed above, request them explicitly using dot notation (e.g., \`fields: ["creator.id", "creator.name"]\`).
+2. **Nested Object Fields** (use dot notation for direct access to sub-fields):
+    * \`creator.id\`, \`creator.name\`, \`creator.email\`
+    * \`workspace.id\`, \`workspace.name\`, \`workspace.type\`
+    * \`project.id\`, \`project.name\`, \`project.description\` (Note: if the task is associated with a project)
+    * \`status.name\`, \`status.isDefaultStatus\`, \`status.isResolvedStatus\`
+    * **Note on simplified access for certain objects:** If you request \`creator\`, \`workspace\`, or \`project\` directly in the \`fields\` parameter (e.g., \`fields: ["creator"]\`), you will receive a simplified object containing just the name (e.g., \`{"creator.name": "Actual Creator Name"}\`). To get all specific sub-fields listed above, request them explicitly using dot notation (e.g., \`fields: ["creator.id", "creator.name"]\`).
 
-3.  **Array Fields:**
-    *   \`assignees\` (Note: Requesting \`assignees\` via \`fields: ["assignees"]\` returns an array of objects, each simplified to contain just the assignee's name: \`[{ name: 'Assignee Name1' }, ...]\`. For full assignee details, use the \`get_users\` tool with their IDs if needed.)
-    *   \`labels\` (Note: Returns an array of label strings associated with the task, e.g., \`["urgent", "bug"]\`.)
-    *   \`chunks\` (Note: Returns an array of task chunks (scheduled time blocks). Each chunk object includes fields like \`id\`, \`duration\`, \`scheduledStart\` (timestamp), \`scheduledEnd\` (timestamp), \`completedTime\` (timestamp or null), \`isFixed\` (boolean). Dates within chunks are also formatted to YYYY-MM-DD where applicable by the underlying processing logic.)
+3. **Array Fields:**
+    * \`assignees\` (Note: Requesting \`assignees\` via \`fields: ["assignees"]\` returns an array of objects, each simplified to contain just the assignee\\'s name: \`[{ name: 'Assignee Name1' }, ...]\`. For full assignee details, use the \`get_users\` tool with their IDs if needed.)
+    * \`labels\` (Note: Returns an array of label strings associated with the task, e.g., \`["urgent", "bug"]\`.)
+    * \`chunks\` (Note: Returns an array of task chunks (scheduled time blocks). Each chunk object includes fields like \`id\`, \`duration\`, \`scheduledStart\` (timestamp), \`scheduledEnd\` (timestamp), \`completedTime\` (timestamp or \`null\`), \`isFixed\` (boolean). Dates within chunks are also formatted to \`YYYY-MM-DD\` where applicable by the underlying processing logic.)
 
 **Examples:**
-- For basic task information: \`fields: ["id", "name", "status.name", "dueDate"]\`
-- For scheduling details including chunks: \`fields: ["id", "name", "scheduledStart", "scheduledEnd", "duration", "chunks"]\`
-- To include creator name and assignee names: \`fields: ["id", "name", "creator", "assignees"]\`
-- To get specific project details: \`fields: ["id", "name", "project.id", "project.name"]\`
+* For basic task information: \`fields: ["id", "name", "status.name", "dueDate"]\`
+* For scheduling details including chunks: \`fields: ["id", "name", "scheduledStart", "scheduledEnd", "duration", "chunks"]\`
+* To include creator name and assignee names: \`fields: ["id", "name", "creator", "assignees"]\`
+* To get specific project details: \`fields: ["id", "name", "project.id", "project.name"]\`
 
 **Default Fields:** (when \`fields\` is omitted):
 ${GET_TASK_BY_ID_DEFAULT_FIELDS.join(', ')}`,
@@ -1686,7 +1686,7 @@ When passing in a task description, the input will be treated as [GitHub Flavore
 **Request Parameters:**
 **Request Body Parameters:**
 - **Required:** \`name\` (string), \`workspaceId\` (string)
-- **Optional:** \`description\` (string), \`dueDate\` (string, YYYY-MM-DD or ISO 8601), \`duration\` (send numbers as strings like \\"30\\" for minutes, or keywords like \\"NONE\\"\\/"REMINDER\\"), \`status\` (string, status name), \`priority\` (string: "ASAP", "HIGH", "MEDIUM", "LOW"), \`assigneeId\` (string, user ID), \`projectId\` (string), \`labels\` (array of strings), \`autoScheduled\` (object or null).
+- **Optional:** \`description\` (string), \`dueDate\` (string, \`YYYY-MM-DD\` or ISO 8601), \`duration\` (send numbers as strings like \`"30"\` for minutes, or keywords like \`"NONE"\` / \`"REMINDER"\`), \`status\` (string, status name), \`priority\` (string: \`"ASAP"\`, \`"HIGH"\`, \`"MEDIUM"\`, \`"LOW"\`), \`assigneeId\` (string, user ID), \`projectId\` (string), \`labels\` (array of strings), \`autoScheduled\` (object or \`null\`).
 
 **Response Format:**
 On success, returns \`{ "status": "SUCCESS", "id": "<NEW_TASK_ID>" }\`.
@@ -1824,26 +1824,26 @@ registerTool(
 **Available Response Fields:**
 
 1. **Simple Fields** (directly accessible):
-   - \`id\`, \`name\`, \`description\`, \`duration\`, \`dueDate\`, \`deadlineType\`
-   - \`completed\`, \`completedTime\`, \`updatedTime\`, \`startOn\`
-   - \`priority\`, \`scheduledStart\`, \`scheduledEnd\`, \`schedulingIssue\`
-   - \`createdTime\`, \`lastInteractedTime\`
+    * \`id\`, \`name\`, \`description\`, \`duration\`, \`dueDate\`, \`deadlineType\`
+    * \`completed\`, \`completedTime\`, \`updatedTime\`, \`startOn\`
+    * \`priority\`, \`scheduledStart\`, \`scheduledEnd\`, \`schedulingIssue\`
+    * \`createdTime\`, \`lastInteractedTime\`
 
 2. **Nested Object Fields** (use dot notation):
-   - \`creator.id\`, \`creator.name\`, \`creator.email\`
-   - \`workspace.id\`, \`workspace.name\`, \`workspace.type\`
-   - \`project.id\`, \`project.name\`, \`project.description\`, \`project.workspaceId\`
-   - \`status.name\`, \`status.isDefaultStatus\`, \`status.isResolvedStatus\`
+    * \`creator.id\`, \`creator.name\`, \`creator.email\`
+    * \`workspace.id\`, \`workspace.name\`, \`workspace.type\`
+    * \`project.id\`, \`project.name\`, \`project.description\`, \`project.workspaceId\`
+    * \`status.name\`, \`status.isDefaultStatus\`, \`status.isResolvedStatus\`
 
 3. **Array Fields** (use array notation, see toolSpecificRules for simplifications):
-   - \`assignees[].id\`, \`assignees[].name\`, \`assignees[].email\` (default simplified to name)
-   - \`labels[]\` (array of strings)
-   - \`chunks[].id\`, \`chunks[].duration\`, \`chunks[].scheduledStart\`, \`chunks[].scheduledEnd\`, \`chunks[].completedTime\`, \`chunks[].isFixed\`
+    * \`assignees[].id\`, \`assignees[].name\`, \`assignees[].email\` (default simplified to name)
+    * \`labels[]\` (array of strings)
+    * \`chunks[].id\`, \`chunks[].duration\`, \`chunks[].scheduledStart\`, \`chunks[].scheduledEnd\`, \`chunks[].completedTime\`, \`chunks[].isFixed\`
 
 **Examples:**
-- For basic task info: \`fields=["id", "name", "status.name", "priority"]\`
-- For scheduling: \`fields=["id", "scheduledStart", "scheduledEnd", "duration"]\`
-- For assignee details: \`fields=["id", "name", "assignees"]\`
+* For basic task info: \`fields=["id", "name", "status.name", "priority"]\`
+* For scheduling: \`fields=["id", "scheduledStart", "scheduledEnd", "duration"]\`
+* For assignee details: \`fields=["id", "name", "assignees"]\`
 
 **Default Fields:** (when \`fields\` is omitted):
 ${GET_TASKS_DEFAULT_FIELDS.join(', ')}`,
@@ -2252,7 +2252,7 @@ registerTool(
 /* List workspaces */
 registerTool(
   'get_workspaces',
-  `Lists workspaces the current user has access to. Supports filtering by specific \`ids\`, pagination via \`cursor\`, and response customization via \`fields\`.
+  `**Overview:** Lists workspaces the current user has access to. Supports filtering by specific \`ids\`, pagination via \`cursor\`, and response customization via \`fields\`.
 
 
 **Available Response Fields:**
