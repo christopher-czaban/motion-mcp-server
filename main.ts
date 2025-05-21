@@ -553,7 +553,26 @@ function registerTool(name: string, description: string, parameters: any, handle
 // Default tools
 registerTool(
   'get_servers',
-  `Get available servers from the Swagger spec`,
+  `**Overview:**
+Gets available servers from the Swagger specification. This tool helps identify the base URLs for making API requests.
+
+**Request Parameters:**
+This tool takes no parameters.
+
+**Examples:**
+Calling this tool does not require any parameters.
+
+A typical response from this tool would be:
+\`\`\`json
+[
+  {
+    "url": "https://api.usemotion.com/v1"
+  }
+]
+\`\`\`
+
+**Fixed Fields:**
+The response is an array of objects, where each object contains a \`url\` field.`,
   {},
   async () => {
     return {
@@ -569,12 +588,34 @@ registerTool(
 
 registerTool(
   'set_base_url',
-  `Set the base URL for API requests
+  `**Overview:**
+Sets the base URL dynamically for subsequent API requests made by the MCP server. This is useful for targeting different API environments (e.g., staging, production) without server restarts.
 
 **Request Parameters:**
 
 **Required Parameters:**
-* \`url\` (string, required): The new base URL`,
+* \`url\` (string, required): The new base URL to be used for API calls (e.g., "https://api.staging.usemotion.com/v1").
+
+**Examples:**
+Setting a new base URL:
+\`\`\`json
+{
+  "url": "https://api.new-environment.com/v1"
+}
+\`\`\`
+This example shows providing the \`url\` parameter.
+
+A typical successful response:
+\`\`\`json
+{
+  "success": true,
+  "newBaseUrl": "https://api.new-environment.com/v1"
+}
+\`\`\`
+
+**Available Response Fields:**
+* \`success\` (boolean): Indicates \`true\` if the base URL was successfully updated.
+* \`newBaseUrl\` (string): Confirms the new base URL that has been set.`,
   { // MODIFIED: Was z.object()
     url: z.string().describe('The new base URL')
   },
@@ -598,15 +639,38 @@ When posting a comment, the content will be treated as [GitHub Flavored Markdown
  */
 registerTool(
   'post_comments',
-  `**Comment Content Input:**
-
-When posting a comment, the content will be treated as [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).
+  `**Overview:**
+Posts a new comment to a specified task. The comment content is treated as GitHub Flavored Markdown.
 
 **Request Parameters:**
 
 **Required Body Parameters:**
 * \`taskId\` (string, required): The ID of the task on which to place the comment.
-* \`content\` (string, required): The content of the comment, in GitHub Flavored Markdown.`,
+* \`content\` (string, required): The content of the comment, in GitHub Flavored Markdown.
+
+**Examples:**
+Minimal example posting a simple comment:
+\`\`\`json
+{
+  "body": {
+    "taskId": "task_456def",
+    "content": "This is a simple comment."
+  }
+}
+\`\`\`
+
+Advanced example posting a comment with Markdown:
+\`\`\`json
+{
+  "body": {
+    "taskId": "task_789ghi",
+    "content": "### Task Update\n\n- Item 1 completed.\n- Item 2 in progress.\n\nPlease see [details](http://example.com)."
+  }
+}
+\`\`\`
+
+**Available Response Fields:**
+The API typically returns the created comment object upon success, including fields like \`id\`, \`content\`, \`createdAt\`, and \`creator\` details. If the operation fails, an error object will be returned. (Note: Exact response structure may vary; refer to Motion API documentation for specifics).`,
   { // MODIFIED: Was z.object()
     body: z.object({
       taskId: z.string().describe('The ID of the task on which to place the comment.'),
@@ -642,7 +706,8 @@ When posting a comment, the content will be treated as [GitHub Flavored Markdown
 /* List Comments */
 registerTool(
   'get_comments',
-  `**Overview:** Lists all comments for a specific task. Returns a paginated list of comment objects, each including its \`content\` (HTML), \`creation timestamp\`, and \`creator information\` (ID, name, email). Supports pagination via a \`cursor\`.
+  `**Overview:**
+Lists all comments for a specific task. Supports pagination via a \`cursor\`.
 
 **Request Parameters:**
 
@@ -650,7 +715,35 @@ registerTool(
 * \`taskId\` (string, required): The ID of the task from which to retrieve comments.
 
 **Optional Parameters:**
-* \`cursor\` (string, optional): Use if a previous request returned a cursor. Will page through results.`,
+* \`cursor\` (string, optional): Use if a previous request returned a cursor. Will page through results for pagination.
+
+**Examples:**
+Minimal example to get comments for a task:
+\`\`\`json
+{
+  "taskId": "task_123xyz"
+}
+\`\`\`
+
+Example to get the next page of comments using a cursor:
+\`\`\`json
+{
+  "taskId": "task_123xyz",
+  "cursor": "nextPageCursorToken"
+}
+\`\`\`
+
+**Available Response Fields:**
+The response is an object containing a \`comments\` array and a \`meta\` object for pagination. Each comment object in the \`comments\` array typically includes:
+* \`id\` (string): The unique ID of the comment.
+* \`content\` (string): The comment content (often HTML).
+* \`createdAt\` (string): Timestamp of when the comment was created.
+* \`creator\` (object): An object containing creator details:
+    * \`id\` (string): Creator\'s user ID.
+    * \`name\` (string): Creator\'s name.
+    * \`email\` (string): Creator\'s email.
+The \`meta\` object may contain a \`cursor\` string for fetching the next page of results.
+(Note: Exact field names and structure may vary; refer to Motion API documentation for specifics).`,
   { // MODIFIED: Was z.object()
     cursor: z.string().optional().describe('Use if a previous request returned a cursor. Will page through results'),
     taskId: z.string().describe('The ID of the task from which to retrieve comments.')
@@ -705,8 +798,24 @@ Use the \`fields\` parameter to select the exact information you need.
     * \`manager.name\` (Note: To get the manager\\'s name, include \`manager\` in your \`fields\` request, e.g., \`fields: ["manager"]\`. The response will then contain \`manager.name\` with the name, or \`null\` if no manager is assigned.)
 
 **Examples:**
-* For core project details: \`fields: ["id", "name", "description", "dueDate"]\`
-* To include the manager\\'s name: \`fields: ["id", "name", "manager"]\`
+Minimal call to retrieve a project with default fields:
+\`\`\`json
+{
+  "projectId": "project_123abc"
+}
+\`\`\`
+This will return the project with the default set of fields: \`id, name, description, workspaceId, priorityLevel, dueDate, startDate, completedTime\`.
+
+Advanced example retrieving specific fields, including a nested one:
+\`\`\`json
+{
+  "projectId": "project_123abc",
+  "fields": ["id", "name", "dueDate", "manager.name"]
+}
+\`\`\`
+This retrieves only the specified fields. Requesting \`"manager"\` in \`fields\` would return \`{"manager.name": "Manager Name"}\` if a manager is assigned.
+
+To get specific manager details beyond just the name (if available and supported by the API for this endpoint), you would need to know the exact available sub-fields for \`manager\` (e.g., \`manager.id\`, \`manager.email\`) and request them explicitly if direct deep field selection is supported. However, based on the current \`Available Response Fields\` section, only \`manager.name\` is explicitly mentioned as accessible via the \`manager\` simplification.
 
 **Default Fields:** (when \`fields\` is omitted):
 ${GET_PROJECT_BY_ID_DEFAULT_FIELDS.join(', ')}`,
@@ -782,9 +891,8 @@ ${GET_PROJECT_BY_ID_DEFAULT_FIELDS.join(', ')}`,
 /* List Projects */
 registerTool(
   'get_projects',
-  `**Overview:** Lists projects for a specified workspace.
-You can customize the information returned for each project using the \`fields\` parameter.
-Supports pagination using the \`cursor\` parameter.
+  `**Overview:**
+Lists projects for a specified workspace. You can customize the information returned for each project using the \`fields\` parameter. Supports pagination using the \`cursor\` parameter.
 
 **Request Parameters:**
 
@@ -797,24 +905,45 @@ Supports pagination using the \`cursor\` parameter.
 
 **Available Response Fields:**
 
-1. **Simple Fields** (directly accessible):
-    * \`id\`, \`name\`, \`description\`, \`priorityLevel\`
-    * \`dueDate\` (Note: \`YYYY-MM-DD\` format)
-    * \`completedTime\` (Note: \`YYYY-MM-DD\` format, or \`null\` if not completed)
-    * \`taskCount\`
-    * \`workspaceId\`
+1.  **Simple Fields** (directly accessible):
+    *   \`id\`, \`name\`, \`description\`, \`priorityLevel\`
+    *   \`dueDate\` (Note: \`YYYY-MM-DD\` format)
+    *   \`completedTime\` (Note: \`YYYY-MM-DD\` format, or \`null\` if not completed)
+    *   \`taskCount\`
+    *   \`workspaceId\`
 
-2. **Nested Object Fields** (use dot notation):
-    * \`status.name\` (e.g., \`"In Progress"\` - this is the project\\'s overall status)
-    * \`manager.name\` (Note: To get the manager\\'s name, include \`manager\` in your \`fields\` request, e.g., \`fields: ["manager"]\`. The response will then contain \`manager.name\` with the name, or \`null\` if no manager is assigned.)
+2.  **Nested Object Fields** (use dot notation):
+    *   \`status.name\` (e.g., \`"In Progress"\` - this is the project\'s overall status)
+    *   \`manager.name\` (Note: To get the manager\'s name, include \`manager\` in your \`fields\` request, e.g., \`fields: ["manager"]\`. The response will then contain \`manager.name\` with the name, or \`null\` if no manager is assigned.)
 
-3. **Meta Object** (for pagination):
-    * \`meta.cursor\` (Note: If more projects are available, this field will contain a cursor string. Pass this string to the \`cursor\` parameter in your next call to fetch the subsequent set of projects.)
+3.  **Meta Object** (for pagination):
+    *   \`meta.cursor\` (Note: If more projects are available, this field will contain a cursor string. Pass this string to the \`cursor\` parameter in your next call to fetch the subsequent set of projects.)
 
 **Examples:**
-* For a basic list view: \`fields: ["id", "name", "status.name"]\`
-* To include manager\\'s name and due date: \`fields: ["id", "name", "dueDate", "manager"]\`
-* For description and task count: \`fields: ["id", "name", "description", "taskCount"]\`
+Minimal call to list projects in a workspace with default fields:
+\`\`\`json
+{
+  "workspaceId": "workspace_456uvw"
+}
+\`\`\`
+This returns projects with default fields: \`id, name, description, priorityLevel, dueDate, status.name, completedTime, taskCount\`.
+
+Advanced example listing projects with specific fields:
+\`\`\`json
+{
+  "workspaceId": "workspace_456uvw",
+  "fields": ["id", "name", "status.name", "manager.name"]
+}
+\`\`\`
+
+Example of fetching the next page of results using a cursor:
+\`\`\`json
+{
+  "workspaceId": "workspace_456uvw",
+  "fields": ["id", "name"],
+  "cursor": "someCursorTokenFromPreviousResponse"
+}
+\`\`\`
 
 **Default Fields:** (when \`fields\` is omitted):
 ${GET_PROJECTS_DEFAULT_FIELDS.join(', ')}`,
@@ -901,7 +1030,8 @@ ${GET_PROJECTS_DEFAULT_FIELDS.join(', ')}`,
 /* Create Project */
 registerTool(
   'post_projects',
-  `**Overview:** Creates a new project in Motion. Ensure you provide the required \`name\` and \`workspaceId\`. Optional fields include \`dueDate\`, \`description\`, \`labels\`, and \`priority\`. Refer to Motion API documentation for details on \`projectDefinitionId\` and template-based project creation if needed, as those are not fully detailed here to keep this concise.
+  `**Overview:**
+Creates a new project in Motion. Ensure you provide the required \`name\` and \`workspaceId\`. Optional fields include \`dueDate\`, \`description\`, \`labels\`, and \`priority\`.
 
 **Request Parameters:**
 
@@ -910,14 +1040,39 @@ registerTool(
 * \`workspaceId\` (string, required): The workspace to which the project belongs.
 
 **Optional Body Parameters:**
-* \`dueDate\` (string, optional): Optional. Project due date (e.g., \`"2024-03-12T10:52:55.714-06:00"\`).
+* \`dueDate\` (string, optional): Optional. Project due date (e.g., "2024-03-12T10:52:55.714-06:00" or "2024-03-12").
 * \`description\` (string, optional): Optional. Project description. HTML input is accepted.
 * \`labels\` (array of string, optional): Optional. List of label names for the project.
-* \`priority\` (string, optional): Optional. Priority of the project. (Valid values: \`"ASAP"\`, \`"HIGH"\`, \`"MEDIUM"\` (default), \`"LOW"\`).
+* \`priority\` (string, optional): Optional. Priority of the project. (Valid values: "ASAP", "HIGH", "MEDIUM" (default), "LOW").
 
-**Response Format:**
-Response on success: \`{ status: "SUCCESS", id: "<NEW_PROJECT_ID>" }\`.
-Response on failure: \`{ status: "FAILURE", id: null }\`.`,
+**Examples:**
+Minimal example to create a project with required fields:
+\`\`\`json
+{
+  "body": {
+    "name": "New Marketing Campaign",
+    "workspaceId": "workspace_789xyz"
+  }
+}
+\`\`\`
+
+Advanced example creating a project with optional fields:
+\`\`\`json
+{
+  "body": {
+    "name": "Q4 Product Launch",
+    "workspaceId": "workspace_789xyz",
+    "description": "Launch plan for the new Q4 product.",
+    "dueDate": "2024-12-15",
+    "priority": "HIGH",
+    "labels": ["product-launch", "marketing"]
+  }
+}
+\`\`\`
+
+**Available Response Fields:**
+* \`status\` (string): Indicates "SUCCESS" or "FAILURE".
+* \`id\` (string | null): If successful, the ID of the newly created project; otherwise, \`null\`.`,
   {
     body: z.object({
       dueDate: z.string().optional().describe("Optional. Project due date (e.g., \"2024-03-12T10:52:55.714-06:00\")."),
@@ -1265,12 +1420,24 @@ registerTool(
 /* Delete a Recurring Task */
 registerTool(
   'delete_recurring-tasks_by_taskId',
-  `**Overview:** Permanently deletes a recurring task configuration based on its \`ID\`.
+  `**Overview:**
+Permanently deletes a recurring task configuration based on its \`ID\`.
 
 **Request Parameters:**
 
 **Required Parameters:**
-* \`taskId\` (string, required): The ID of the recurring task configuration to delete.`,
+* \`taskId\` (string, required): The ID of the recurring task configuration to delete.
+
+**Examples:**
+To delete a recurring task configuration:
+\`\`\`json
+{
+  "taskId": "recurring_task_789xyz"
+}
+\`\`\`
+
+**Available Response Fields:**
+A successful deletion typically returns a \`204 No Content\` status or a success confirmation object from the API. If the operation fails (e.g., task not found), an error object will be returned. (Note: Exact response structure may vary; refer to Motion API documentation for specifics).`,
   { // MODIFIED: Was z.object()
     taskId: z.string().describe('The ID of the recurring task configuration to delete.')
   },
@@ -2065,14 +2232,7 @@ ${GET_TASKS_DEFAULT_FIELDS.join(', ')}`,
   }
 );
 
-/* <!-- theme: warning -->
 
-> ### Note
->
-> For simplicity, use this endpoint to unassign a task
-> instead of the generic update task endpoint.
-> This also prevents bugs and accidental unassignments.
- */
 registerTool(
   'delete_tasks_assignee',
   `**Overview:** For simplicity, use this endpoint to unassign a task instead of the generic update task endpoint. This also prevents bugs and accidental unassignments.
@@ -2286,12 +2446,32 @@ This tool does not support the \`fields\` parameter.`,
 /* Get My User */
 registerTool(
   'get_users_me',
-  `**Overview:** Retrieves the profile information for the currently authenticated user (associated with the API key).
-**Fixed Fields:** This tool always returns an object containing the following fixed fields:
-* \`id\`: The user\\'s unique identifier.
-* \`name\`: The user\\'s name.
-* \`email\`: The user\\'s email address.
-**Notes:** This tool does *not* support the \`fields\` parameter.`,
+  `**Overview:**
+Retrieves the profile information for the currently authenticated user (associated with the API key).
+
+**Request Parameters:**
+This tool takes no parameters.
+
+**Examples:**
+Calling this tool does not require any parameters.
+
+A typical response from this tool would be:
+\`\`\`json
+{
+  "id": "user_123abc",
+  "name": "Jane Doe",
+  "email": "jane.doe@example.com"
+}
+\`\`\`
+
+**Fixed Fields:**
+This tool always returns an object containing the following fixed fields:
+* \`id\`: The user\'s unique identifier.
+* \`name\`: The user\'s name.
+* \`email\`: The user\'s email address.
+
+**Notes:**
+This tool does *not* support the \`fields\` parameter.`,
   {},
   async (params) => {
     try {
