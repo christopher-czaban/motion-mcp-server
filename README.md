@@ -9,6 +9,7 @@
 - [About Motion Task Management](#about-motion-task-management)
 - [Setup](#setup)
 - [Usage with Claude Desktop](#usage-with-claude-desktop)
+- [Usage with SSE/HTTP Clients via MCP Proxy](#usage-with-ssehttp-clients-via-mcp-proxy)
 - [Other Ways to Connect AI to Motion](#other-ways-to-connect-ai-to-motion)
 - [Rate Limiting](#rate-limiting)
 - [Understanding Rate Limit Errors](#understanding-rate-limit-errors)
@@ -166,6 +167,110 @@ To use this Motion MCP server with Claude Desktop:
 3.  **Restart Claude Desktop.** After saving the configuration file, you must fully quit and restart Claude Desktop for the changes to take effect.
 
 Once configured and restarted, Claude should be able to invoke the Motion tools (e.g., "motion get_tasks").
+
+## Usage with SSE/HTTP Clients via MCP Proxy
+
+Some AI clients and applications only support Server-Sent Events (SSE) or streamable HTTP connections rather than the standard MCP stdio protocol. For these clients, you can use the `mcp-proxy` server to bridge the connection between your HTTP/SSE client and this Motion MCP server.
+
+### Prerequisites
+
+Before proceeding, ensure you have completed the basic [Setup](#setup) steps for this Motion MCP server, including:
+- Installing Node.js and dependencies
+- Configuring your `MOTION_API_KEY`
+
+### Installing MCP Proxy
+
+The `mcp-proxy` server acts as a bridge, converting HTTP/SSE requests into MCP stdio communication with this Motion server.
+
+1. **Install mcp-proxy using uv:**
+   ```bash
+   uv tool install git+https://github.com/sparfenyuk/mcp-proxy
+   ```
+
+2. **Verify installation and locate the binary:**
+   For less technical users, you can find the installation path using:
+   ```bash
+   which mcp-proxy
+   ```
+   This will output the full path to the `mcp-proxy` binary (e.g., `/home/user/.local/bin/mcp-proxy`).
+
+### Starting the MCP Proxy Server
+
+Start the proxy server with your Motion API key and the path to this server's `main.ts` file:
+
+```bash
+/path/to/mcp-proxy --port 8080 --env MOTION_API_KEY "your_motion_api_key_here" npx tsx /path/to/your/motion_mcp_server/main.ts
+```
+
+**Important replacements:**
+- Replace `/path/to/mcp-proxy` with the actual path from the `which mcp-proxy` command
+- Replace `"your_motion_api_key_here"` with your actual Motion API key
+- Replace `/path/to/your/motion_mcp_server/main.ts` with the absolute path to this server's `main.ts` file
+
+**Example:**
+```bash
+/home/user/.local/bin/mcp-proxy --port 8080 --env MOTION_API_KEY "mt_abc123xyz789" npx tsx /home/user/projects/motion-mcp-server/main.ts
+```
+
+### Configuring Your MCP Client
+
+Once the proxy server is running, configure your MCP client depending on the connection type it supports:
+
+#### For Streamable HTTP Connections
+
+Add this configuration to your client's MCP configuration file:
+
+```json
+{
+  "mcpServers": {
+    "motion-mcp": {
+      "type": "mcp",
+      "url": "http://localhost:8080/mcp",
+      "note": "Motion MCP server via HTTP proxy"
+    }
+  }
+}
+```
+
+#### For SSE (Server-Sent Events) Connections
+
+Add this configuration to your client's MCP configuration file:
+
+```json
+{
+  "mcpServers": {
+    "motion-sse": {
+      "type": "sse",
+      "url": "http://localhost:8080/sse",
+      "note": "Motion MCP server via SSE proxy"
+    }
+  }
+}
+```
+
+### Testing with MCP Inspector
+
+You can test your proxy setup using the MCP Inspector tool:
+
+1. **Create a test configuration file** (e.g., `mcp-test-config.json`) with one of the configurations above.
+
+2. **Run the Inspector:**
+   ```bash
+   npx @modelcontextprotocol/inspector --config /path/to/mcp-test-config.json --server motion-mcp
+   ```
+   (Use `--server motion-sse` if you're testing the SSE configuration)
+
+3. **Access the Inspector:** Open the URL provided by the Inspector (typically `http://127.0.0.1:6274`) in your web browser to test the Motion tools through the proxy.
+
+### Important Notes
+
+- **Keep the proxy running:** The `mcp-proxy` server must remain running while your client is using the Motion MCP server. If you stop the proxy, your client will lose connection to the Motion tools.
+
+- **Port conflicts:** If port 8080 is already in use, choose a different port (e.g., `--port 8081`) and update your client configuration URLs accordingly.
+
+- **Rate limiting:** The same rate limiting rules apply when using the proxy. The Motion API's 12 calls per 3-minute limit is enforced regardless of the connection method.
+
+- **Security:** The proxy server runs locally and exposes HTTP endpoints. Ensure your firewall settings are appropriate for your security requirements.
 
 ## Other Ways to Connect AI to Motion
 
