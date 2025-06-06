@@ -1,3 +1,5 @@
 {
-  "agentCanUpdateSnapshot": true
+  "agentCanUpdateSnapshot": true,
+  "install": "npm install",
+  "start": "npm run build"
 }

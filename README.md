@@ -3,6 +3,8 @@
 **An open-source MCP server enabling AI assistants to interact with the Motion API for intelligent task and project management.**
 
 ## Table of Contents
+- [Architecture](#architecture)
+- [Development](#development)
 - [Motivation](#motivation)
 - [Features](#features)
 - [Smart Data Retrieval for AI Efficiency](#smart-data-retrieval-for-ai-efficiency)
@@ -17,6 +19,124 @@
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
+
+## Architecture
+
+The Motion MCP Server features a modular architecture designed for maintainability, scalability, and ease of development. The codebase is organized into focused modules that handle specific aspects of the server functionality.
+
+### Project Structure
+
+```
+src/
+├── api/                 # API communication layer
+├── config/             # Configuration management
+├── database/           # Database abstractions
+├── field-processing/   # Field selection and transformation
+├── integration/        # Service container and dependency injection
+├── logging/           # Structured logging
+├── monitoring/        # Metrics and health checks
+├── optimization/      # Performance improvements
+├── resilience/        # Error handling and recovery
+├── schemas/           # Zod schema system
+├── security/          # Security and validation
+├── services/          # Core services (rate limiting, etc.)
+├── testing/           # Tool testing framework
+├── tools/             # Individual tool implementations
+│   ├── comments/      # Comment-related tools
+│   ├── infrastructure/# Basic infrastructure tools
+│   ├── projects/      # Project management tools
+│   ├── recurring-tasks/# Recurring task tools
+│   ├── schedules/     # Schedule tools
+│   ├── statuses/      # Status tools
+│   ├── tasks/         # Task management tools
+│   ├── users/         # User management tools
+│   └── workspaces/    # Workspace tools
+├── types/             # TypeScript type definitions
+└── utils/             # Utility functions
+
+tests/                 # Test files mirroring src structure
+```
+
+### Key Architectural Benefits
+
+- **Modular Design**: Each module has a specific responsibility, making the codebase easier to understand and maintain
+- **Path Mapping**: Clean imports using TypeScript path aliases (e.g., `@/api/*`, `@/tools/*`)
+- **Scalability**: New tools and features can be added without affecting existing functionality
+- **Testing**: Comprehensive test coverage with Vitest framework
+- **Type Safety**: Full TypeScript support with strict mode enabled
+
+## Development
+
+### Prerequisites
+
+- Node.js ≥18.0.0
+- npm or yarn package manager
+
+### Development Setup
+
+1. **Clone and install dependencies:**
+   ```bash
+   git clone <repository-url>
+   cd motion_mcp_server
+   npm install
+   ```
+
+2. **Development Scripts:**
+   ```bash
+   # Start development server
+   npm run dev
+
+   # Build the project
+   npm run build
+
+   # Run tests
+   npm test
+   npm run test:coverage  # With coverage report
+   npm run test:ui        # Interactive test UI
+
+   # Code quality
+   npm run lint           # Check for linting issues
+   npm run lint:fix       # Auto-fix linting issues
+   npm run format         # Format code with Prettier
+   npm run format:check   # Check formatting without changes
+   npm run type-check     # TypeScript type checking
+
+   # Combined quality checks
+   npm run dev:tools      # Run lint, format check, and type check
+   ```
+
+3. **Path Mapping:**
+   The project uses TypeScript path mapping for clean imports:
+   ```typescript
+   // Instead of relative imports
+   import { someUtil } from '../../../utils/someUtil.js';
+   
+   // Use path aliases
+   import { someUtil } from '@/utils/someUtil.js';
+   ```
+
+4. **Adding New Tools:**
+   Tools are organized by category in `src/tools/`. Each tool category has its own directory with an `index.ts` file for exports.
+
+5. **Testing:**
+   Tests are located in the `tests/` directory, mirroring the `src/` structure. The project uses Vitest for testing with comprehensive mocking support.
+
+### Environment Configuration
+
+Copy `env.example` to `.env` and configure your environment variables:
+
+```bash
+cp env.example .env
+```
+
+Required environment variables:
+- `MOTION_API_KEY`: Your Motion API key
+
+Optional environment variables:
+- `NODE_ENV`: Development environment (default: development)
+- `LOG_LEVEL`: Logging level (default: info)
+- `RATE_LIMIT_WINDOW_MS`: Rate limiting window in milliseconds
+- `RATE_LIMIT_MAX_REQUESTS`: Maximum requests per window
 
 ## Motivation
 

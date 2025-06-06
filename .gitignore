@@ -9,14 +9,26 @@ dev-debug.log
 # Rules files
 .roo
 .windsurfrules
-.cursor
+.cursor/**/*
 .roomodes
+
+# Cursor Background Agents
+!.cursor/environment.json
 
 # Dependency directories
 node_modules/
 
+# Build directories
+dist/
+build/
+lib/
+coverage/
+
 # Environment variables
 .env
+.env.local
+.env.*.local
+.env.example
 
 # Editor directories and files
 .idea
@@ -62,3 +74,7 @@ prds/20250515_tool_token_efficiency_prd.txt
 prds/20250530_rate_limiting_prd.txt
 prds/20250603_tool_doc_improvement_prd.md
 prds/20250606_refactoring_prd.md
+planning/sprint-*
+
+# Added by Task Master AI
+# Task files

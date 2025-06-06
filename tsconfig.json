@@ -4,16 +4,47 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "strict": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
     "outDir": "./dist",
+    "rootDir": "./src",
     "baseUrl": ".",
     "paths": {
-      "*": ["node_modules/*"]
+      "@/*": ["src/*"],
+      "@/api/*": ["src/api/*"],
+      "@/config/*": ["src/config/*"],
+      "@/database/*": ["src/database/*"],
+      "@/field-processing/*": ["src/field-processing/*"],
+      "@/integration/*": ["src/integration/*"],
+      "@/logging/*": ["src/logging/*"],
+      "@/monitoring/*": ["src/monitoring/*"],
+      "@/optimization/*": ["src/optimization/*"],
+      "@/resilience/*": ["src/resilience/*"],
+      "@/schemas/*": ["src/schemas/*"],
+      "@/security/*": ["src/security/*"],
+      "@/services/*": ["src/services/*"],
+      "@/testing/*": ["src/testing/*"],
+      "@/tools/*": ["src/tools/*"],
+      "@/types/*": ["src/types/*"],
+      "@/utils/*": ["src/utils/*"]
     }
   },
-  "include": ["**/*.ts"],
-  "exclude": ["node_modules", ".data", "dist", "tasks", "exported_cursor_chats"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "tests",
+    ".data",
+    "tasks",
+    "exported_cursor_chats",
+    ".taskmaster"
+  ]
 } 
