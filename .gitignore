@@ -45,3 +45,20 @@ prd_rate_limit.txt
 # Unrelated documentation
 mcp_llms-full.txt
 motion_openapi_specification.json
+.taskmaster/config.json
+.taskmaster/reports/archived/task-complexity-report.json
+.taskmaster/templates/example_prd.txt
+content_material/Untitled video.mp4
+content_material/linkedin_announcement.md
+docs/old__code_documentation_consistency_report.md
+docs/full_instructions.md
+docs/old__current_state_summary.md
+docs/prioritization_instructions_template.md
+docs/prioritization_instructions.md
+docs/workflow_implementation_rules.md
+exported_cursor_chats/cursor_handoff_of_motion_mcp_server_pro.md
+exported_cursor_chats/cursor_improving_tool_documentation_hea.md
+prds/20250515_tool_token_efficiency_prd.txt
+prds/20250530_rate_limiting_prd.txt
+prds/20250603_tool_doc_improvement_prd.md
+prds/20250606_refactoring_prd.md
