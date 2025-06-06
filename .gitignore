@@ -44,7 +44,7 @@ coverage/
 
 # Taskmasters files and cofigs
 tasks.json
-tasks/
+.taskmaster/**/*
 scripts/
 .taskmasterconfig
 .taskmaster.env.example
