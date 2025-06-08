@@ -9,11 +9,9 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "outDir": "./dist",
-    "baseUrl": ".",
-    "paths": {
-      "*": ["node_modules/*"]
-    }
+    "rootDir": "./src",
+    "baseUrl": "."
   },
-  "include": ["**/*.ts"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", ".data", "dist", "tasks", "exported_cursor_chats"]
 } 
