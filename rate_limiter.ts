@@ -1,4 +1,4 @@
-import db from './database';
+import db from './database.js';
 
 // Constants defined in main.ts, but duplicated here for clarity during development
 // In a production system, these might be imported or passed to the constructor.
