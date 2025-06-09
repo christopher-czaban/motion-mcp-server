@@ -13,12 +13,18 @@ console.error(`[MCP Server main.ts] Node version: ${process.version}`);
  * SOFTWARE.
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import './database.js'; // Ensures database is initialized on startup
-import rateLimiter from './rate_limiter.js'; 
+import rateLimiter from './rate_limiter.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
+import {
+  createServer,
+  startServer,
+  registerTool,
+  parameterizeEndpoint,
+  callApi,
+  setBaseUrl
+} from './src/tools/index.js';
 
 // Prune old records on server startup
 try {
@@ -393,157 +399,12 @@ const GET_TASKS_TOOL_SPECIFIC_RULES = {
   // `labels` is an array of strings, so no item simplification needed.
 };
 
-const server = new McpServer({
+// Initialize the server and tool infrastructure
+const server = createServer({
   name: 'Motion AI Assistant',
-  version: '1.0.0'
+  version: '1.0.0',
+  baseUrl: baseUrl
 });
-
-function parameterizeEndpoint(endpoint: string, parameters: Record<string, any>): string {
-  // Handle path parameters
-  let path = endpoint.replace(/\{([^}]+)\}/g, (match, paramName) => {
-    const value = parameters[paramName];
-    if (value === undefined || value === null) {
-      throw new Error(`Missing required parameter: ${paramName}`);
-    }
-    return encodeURIComponent(value);
-  });
-
-  // Handle query parameters
-  const queryParams = Object.entries(parameters)
-    .filter(([key]) => !endpoint.includes(`{${key}}`)) // Exclude path parameters
-    .filter(([_, value]) => value !== undefined && value !== null) // Exclude null/undefined values
-    .map(([key, value]) => {
-      if (Array.isArray(value)) {
-        return value.map(v => `${encodeURIComponent(key)}=${encodeURIComponent(v)}`).join('&');
-      }
-      return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
-    })
-    .join('&');
-
-  if (queryParams) {
-    path += `?${queryParams}`;
-  }
-
-  return path;
-}
-
-async function callApi(endpoint: string, method: string, body?: any, contentType?: string) {
-  // Check rate limit only for calls to the Motion API (baseUrl)
-  // Construct the full URL to check against baseUrl. 
-  // The `endpoint` parameter to callApi is usually a path like '/projects', not a full URL.
-  const fullUrl = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
-
-  if (fullUrl.startsWith(baseUrl)) {
-    const { allowed, waitTimeMs } = rateLimiter.checkAndRecordCall();
-    if (!allowed && waitTimeMs !== undefined) { // Ensure waitTimeMs is defined before using it
-      const waitTimeSec = Math.ceil(waitTimeMs / 1000);
-      console.warn(`Motion API rate limit reached. Please wait ${waitTimeSec} seconds before trying again.`);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              error: 'Rate Limit Exceeded',
-              details: `Motion API rate limit reached. Please wait ${waitTimeSec} seconds before trying again.`,
-              waitTimeSeconds: waitTimeSec
-            })
-          }
-        ],
-        isError: true
-      };
-    } else if (!allowed) {
-        // Fallback if waitTimeMs is somehow undefined but call is not allowed
-        console.warn(`Motion API rate limit reached. Please wait before trying again.`);
-        return {
-            content: [
-                {
-                    type: 'text',
-                    text: JSON.stringify({
-                        error: 'Rate Limit Exceeded',
-                        details: `Motion API rate limit reached. Please wait a few minutes before trying again.`
-                    })
-                }
-            ],
-            isError: true
-        };
-    }
-  }
-
-  const headers: Record<string, string> = {};
-  if (contentType) {
-    headers['Content-Type'] = contentType;
-  }
-  // Retrieve API key from environment variable
-  const apiKey = process.env.MOTION_API_KEY;
-  if (!apiKey) {
-    // Return an error response if the API key is missing
-    // This prevents leaking information about the missing key in thrown errors
-    console.error("Error: MOTION_API_KEY environment variable not set.");
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({ error: 'Configuration error', details: 'MOTION_API_KEY environment variable not set. Please configure it in your MCP client.' })
-        }
-      ],
-      isError: true // Indicate that this is a tool execution error
-    };
-  }
-  headers['X-API-Key'] = apiKey; // Add the API key header
-
-  const response = await fetch(`${baseUrl}${endpoint}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined
-  });
-  
-  // Check for non-OK responses after fetch, but before trying to parse JSON
-  if (!response.ok) {
-    // Attempt to read error details, but handle cases where it might not be JSON
-    let errorDetails = `HTTP error! status: ${response.status}`;
-    try {
-        const errorData = await response.json();
-        errorDetails = JSON.stringify(errorData);
-    } catch (e) {
-        // If response is not JSON, use the status text or default message
-        errorDetails = response.statusText || errorDetails;
-    }
-    console.error("API call failed:", errorDetails);
-    return {
-        content: [
-            {
-                type: 'text',
-                text: JSON.stringify({ error: 'API Error', details: errorDetails })
-            }
-        ],
-        isError: true // Indicate a tool execution error
-    };
-  }
-
-  // Proceed to parse JSON only if the response was ok
-  const data = await response.json();
-  return {
-    content: [
-      {
-        type: 'text',
-        text: JSON.stringify(data)
-      }
-    ]
-    // No isError field means success
-  };
-}
-
-function registerTool(name: string, description: string, parameters: any, handler: (params: any) => Promise<any>) {
-  try {
-    // Directly use the parameters as passed.
-    // The MCP SDK is expected to handle plain objects with Zod types,
-    // or z.object() instances if tools are defined that way.
-    console.error(`[MCP Server main.ts] Registering tool: ${name} with parameters:`, JSON.stringify(parameters, null, 2));
-    server.tool(name, description, parameters, handler);
-  } catch (error) {
-    console.error(`Failed to register tool ${name}:`, error);
-  }
-}
 
 /******************************************************************************
  * TODO AUTOGENERATED SECTION STARTS                                          *
@@ -621,12 +482,12 @@ A typical successful response:
   },
   async (params) => {
     const validatedParams = z.object({ url: z.string() }).parse(params);
-    baseUrl = validatedParams.url;
+    setBaseUrl(validatedParams.url);
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify({ success: true, newBaseUrl: baseUrl })
+          text: JSON.stringify({ success: true, newBaseUrl: validatedParams.url })
         }
       ]
     };
@@ -2669,5 +2530,5 @@ ${GET_WORKSPACES_DEFAULT_FIELDS.join(', ')}`,
   }
 );
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+// Start the server
+await startServer();
