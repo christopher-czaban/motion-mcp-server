@@ -1,4 +1,4 @@
-import db from './database';
+import db from './database.js';
 
 // Constants defined in main.ts, but duplicated here for clarity during development
 // In a production system, these might be imported or passed to the constructor.
@@ -26,10 +26,10 @@ export class RateLimiter {
       if (recentCalls.count < MAX_CALLS) {
         const insertStmt = db.prepare('INSERT INTO api_call_timestamps (timestamp_ms) VALUES (?)');
         insertStmt.run(now);
-        
+
         // Prune old records opportunistically within the same transaction
         this.pruneOldRecords(now); // Pass current time to pruneOldRecords
-        
+
         return { allowed: true };
       } else {
         const oldestInWindowStmt = db.prepare(

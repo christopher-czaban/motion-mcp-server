@@ -25,7 +25,7 @@ try {
   // Depending on requirements, might want to throw or exit here
 }
 
-let db;
+let db: Database.Database;
 try {
   // Initialize database connection
   db = new Database(DB_PATH, { /* verbose: console.error // uncomment for debugging */ });
@@ -49,4 +49,4 @@ try {
   throw error;
 }
 
-export default db; 
+export default db;
